@@ -4,6 +4,7 @@
     "dt": "Issue",
     "fieldname": "synthetic_reference",
     "fieldtype": "Data",
-    "label": "Synthetic Reference"
+    "label": "Synthetic Reference",
+    "description": "External reference used by support."
   }
 ]
