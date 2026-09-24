@@ -1,0 +1,9 @@
+[
+  {
+    "doctype": "Custom Field",
+    "dt": "Issue",
+    "fieldname": "synthetic_reference",
+    "fieldtype": "Data",
+    "label": "Synthetic Reference"
+  }
+]
