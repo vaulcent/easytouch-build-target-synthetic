@@ -9,3 +9,4 @@ and may be reset or deleted at any time.
 customer app would be, so `Requirement`-driven changes have something realistic to patch.
 
 Default branch: `main`. Change branches follow `change/<change-id>`.
+<!-- Easytouch live proof 2026-09-24T11:19:55.102427+00:00 -->
