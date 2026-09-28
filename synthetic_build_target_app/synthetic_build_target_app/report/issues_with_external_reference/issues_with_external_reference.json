@@ -1,0 +1,25 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "is_standard": "Yes",
+ "letter_head": null,
+ "module": "Synthetic Build Target App",
+ "name": "Issues with External Reference",
+ "owner": "owner@nasiib.example",
+ "prepared_report": 0,
+ "ref_doctype": "Issue",
+ "report_name": "Issues with External Reference",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Agent"
+  }
+ ]
+}
