@@ -1,6 +1,7 @@
 [
   {
     "doctype": "Custom Field",
+    "name": "Issue-synthetic_reference",
     "dt": "Issue",
     "fieldname": "synthetic_reference",
     "fieldtype": "Data",
