@@ -2,3 +2,13 @@
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
