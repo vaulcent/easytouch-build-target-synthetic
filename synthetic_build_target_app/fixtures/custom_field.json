@@ -5,5 +5,14 @@
     "fieldname": "synthetic_reference",
     "fieldtype": "Data",
     "label": "Synthetic Reference"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "Lead",
+    "fieldname": "referral_source",
+    "fieldtype": "Select",
+    "label": "Referral Source",
+    "options": "Website\nReferral\nCold Call",
+    "insert_after": "source"
   }
 ]
