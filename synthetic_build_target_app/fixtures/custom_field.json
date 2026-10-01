@@ -26,5 +26,15 @@
     "label": "Priority Tier",
     "options": "Low\nMedium\nHigh",
     "insert_after": "priority"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Opportunity-release_pipeline_proof",
+    "dt": "Opportunity",
+    "fieldname": "release_pipeline_proof",
+    "fieldtype": "Small Text",
+    "label": "Release Pipeline Proof",
+    "insert_after": "title",
+    "description": "Used only to prove the release validation/promotion pipeline end to end."
   }
 ]
