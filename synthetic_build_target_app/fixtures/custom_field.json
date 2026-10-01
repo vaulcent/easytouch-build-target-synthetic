@@ -16,5 +16,15 @@
     "label": "Referral Source",
     "options": "Website\nReferral\nCold Call",
     "insert_after": "source"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Task-priority_tier",
+    "dt": "Task",
+    "fieldname": "priority_tier",
+    "fieldtype": "Select",
+    "label": "Priority Tier",
+    "options": "Low\nMedium\nHigh",
+    "insert_after": "priority"
   }
 ]
