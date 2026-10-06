@@ -36,5 +36,14 @@
     "label": "Release Pipeline Proof",
     "insert_after": "title",
     "description": "Used only to prove the release validation/promotion pipeline end to end."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Customer-support_reference_code",
+    "dt": "Customer",
+    "fieldname": "support_reference_code",
+    "fieldtype": "Data",
+    "label": "Support Reference Code",
+    "insert_after": "customer_name"
   }
 ]
