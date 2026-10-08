@@ -36,5 +36,14 @@
     "label": "Release Pipeline Proof",
     "insert_after": "title",
     "description": "Used only to prove the release validation/promotion pipeline end to end."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Lead-focused_qa_review_note_20261008",
+    "dt": "Lead",
+    "fieldname": "focused_qa_review_note_20261008",
+    "fieldtype": "Data",
+    "label": "Focused QA review note",
+    "insert_after": "annual_revenue"
   }
 ]
