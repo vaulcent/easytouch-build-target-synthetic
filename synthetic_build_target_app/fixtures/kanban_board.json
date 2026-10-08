@@ -1,0 +1,61 @@
+[
+  {
+    "doctype": "Kanban Board",
+    "name": "Task Kanban",
+    "kanban_board_name": "Task Kanban",
+    "reference_doctype": "Task",
+    "field_name": "status",
+    "show_labels": 0,
+    "columns": [
+      {
+        "doctype": "Kanban Board Column",
+        "column_name": "Open",
+        "status": "Open",
+        "indicator": "grey",
+        "order": "[]"
+      },
+      {
+        "doctype": "Kanban Board Column",
+        "column_name": "Working",
+        "status": "Open",
+        "indicator": "orange",
+        "order": "[]"
+      },
+      {
+        "doctype": "Kanban Board Column",
+        "column_name": "Pending Review",
+        "status": "Open",
+        "indicator": "yellow",
+        "order": "[]"
+      },
+      {
+        "doctype": "Kanban Board Column",
+        "column_name": "Completed",
+        "status": "Open",
+        "indicator": "green",
+        "order": "[]"
+      },
+      {
+        "doctype": "Kanban Board Column",
+        "column_name": "Overdue",
+        "status": "Open",
+        "indicator": "red",
+        "order": "[]"
+      },
+      {
+        "doctype": "Kanban Board Column",
+        "column_name": "Cancelled",
+        "status": "Open",
+        "indicator": "red",
+        "order": "[]"
+      },
+      {
+        "doctype": "Kanban Board Column",
+        "column_name": "Template",
+        "status": "Open",
+        "indicator": "grey",
+        "order": "[]"
+      }
+    ]
+  }
+]
