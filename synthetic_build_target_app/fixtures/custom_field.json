@@ -36,5 +36,13 @@
     "label": "Release Pipeline Proof",
     "insert_after": "title",
     "description": "Used only to prove the release validation/promotion pipeline end to end."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Project-focused_architecture_status",
+    "dt": "Project",
+    "fieldname": "focused_architecture_status",
+    "fieldtype": "Data",
+    "label": "Focused Architecture Status"
   }
 ]
