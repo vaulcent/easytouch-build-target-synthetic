@@ -1,0 +1,10 @@
+[
+  {
+    "doctype": "Role",
+    "name": "Sales Invoice Rate Override",
+    "role_name": "Sales Invoice Rate Override",
+    "desk_access": 1,
+    "disabled": 0,
+    "is_custom": 1
+  }
+]

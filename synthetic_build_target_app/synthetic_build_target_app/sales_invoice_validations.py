@@ -16,13 +16,24 @@ DocType:
 
 Both lanes call the same function so the rule is enforced consistently and
 idempotently; there is no duplicated validation logic to drift out of sync.
+
+Each child row's own ``valuation_rate`` is normally populated by ERPNext's
+standard pricing calculations, but it can be empty (for example on a
+manually keyed-in row before those calculations run). When that happens,
+this module falls back to reading the *real* current warehouse valuation
+rate from the ``Bin`` for that ``item_code`` + the row's own ``warehouse``
+(falling back to the invoice's ``set_warehouse`` only if the row itself has
+no warehouse), instead of silently skipping the check for that row. No
+item, warehouse, company, or invoice is ever hardcoded.
 """
 
 import frappe
 from frappe import _
 
 #: Role that is authorized to override the selling-rate-below-valuation
-#: check and submit the Sales Invoice anyway.
+#: check and submit the Sales Invoice anyway. Provisioned idempotently as
+#: a Role fixture (see fixtures/role.json + hooks.py ``fixtures``) so it
+#: is assignable to users on a real site.
 AUTHORIZED_OVERRIDE_ROLE = "Sales Invoice Rate Override"
 
 
@@ -44,6 +55,12 @@ def validate_selling_rate_against_valuation_rate(doc, method=None):
         valuation_rate = item.get("valuation_rate") or 0
         selling_rate = item.get("rate") or 0
 
+        if not valuation_rate:
+            valuation_rate = _get_warehouse_bin_valuation_rate(
+                item.get("item_code"),
+                item.get("warehouse") or doc.get("set_warehouse"),
+            )
+
         if valuation_rate and selling_rate < valuation_rate:
             frappe.throw(
                 _(
@@ -59,3 +76,24 @@ def validate_selling_rate_against_valuation_rate(doc, method=None):
                 ),
                 title=_("Selling Rate Below Valuation Rate"),
             )
+
+
+def _get_warehouse_bin_valuation_rate(item_code, warehouse):
+    """Read the real, current ``Bin.valuation_rate`` for item_code+warehouse.
+
+    Used only as a fallback when a Sales Invoice child row's own
+    ``valuation_rate`` is empty. Reads the live warehouse Bin instead of
+    assuming any particular item, warehouse, or company. Returns ``0`` if
+    either argument is missing or no matching Bin exists.
+    """
+    if not item_code or not warehouse:
+        return 0
+
+    return (
+        frappe.db.get_value(
+            "Bin",
+            {"item_code": item_code, "warehouse": warehouse},
+            "valuation_rate",
+        )
+        or 0
+    )
