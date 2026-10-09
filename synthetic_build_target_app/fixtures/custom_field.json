@@ -46,5 +46,17 @@
     "label": "Release Pipeline Proof",
     "insert_after": "title",
     "description": "Used only to prove the release validation/promotion pipeline end to end."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Customer-risk_classification",
+    "dt": "Customer",
+    "fieldname": "risk_classification",
+    "fieldtype": "Select",
+    "label": "Risk Classification",
+    "options": "Normal\nVIP\nHigh Risk",
+    "default": "Normal",
+    "insert_after": "customer_group",
+    "description": "Team-assigned classification: Normal, VIP, or High Risk."
   }
 ]
