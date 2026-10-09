@@ -42,19 +42,32 @@ class TestImportantItemLowStockAlertNotification(unittest.TestCase):
             "fixture (idempotent - no duplicates).",
         )
 
-    def test_alert_targets_bin_stock_quantity_changes(self):
+    def test_alert_targets_bin_document_type(self):
         entry = self._alert_entries()[0]
         self.assertEqual(entry["document_type"], "Bin")
-        self.assertEqual(entry["event"], "Value Change")
-        self.assertEqual(entry["value_changed"], "actual_qty")
         self.assertEqual(entry.get("enabled"), 1)
         self.assertEqual(entry.get("channel"), "Email")
 
-    def test_alert_condition_checks_threshold_and_important_flag(self):
+    def test_alert_uses_custom_event_not_wired_to_ordinary_bin_saves(self):
+        # "Custom" is not auto-triggered by core Bin save/value-change doc
+        # events, so this Notification cannot separately fire for ordinary
+        # Bin saves; it is only ever dispatched explicitly by the
+        # stock_ledger_alerts hook calling notification.send(bin_doc).
+        entry = self._alert_entries()[0]
+        self.assertEqual(entry["event"], "Custom")
+        self.assertNotIn("value_changed", entry)
+
+    def test_alert_condition_is_limited_to_valid_bin_fields(self):
+        # Real ERPNext v16 metadata validation rejects a condition
+        # referencing doc.is_important_item on Bin (no such field), and
+        # frappe.db access from a Notification's safe_eval'd condition is
+        # forbidden. The stored condition must therefore reference only a
+        # real Bin field.
         entry = self._alert_entries()[0]
         condition = entry["condition"]
         self.assertIn("doc.actual_qty < 10", condition)
-        self.assertIn("is_important_item", condition)
+        self.assertNotIn("is_important_item", condition)
+        self.assertNotIn("frappe.db", condition)
 
     def test_alert_recipient_is_purchase_manager_role(self):
         entry = self._alert_entries()[0]
