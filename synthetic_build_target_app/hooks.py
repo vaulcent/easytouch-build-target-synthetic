@@ -5,4 +5,4 @@ app_description = "Fabricated disposable Frappe app used only as a D1 GitHub int
 app_email = "fixture@example.test"
 app_license = "MIT"
 
-fixtures = ["Custom Field"]
+fixtures = ["Custom Field", "Notification"]
