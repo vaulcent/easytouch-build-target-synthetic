@@ -11,3 +11,22 @@ after_migrate = (
 )
 
 fixtures = ["Custom Field"]
+
+# Server-side validation lanes that prevent submitting a Sales Invoice when
+# any item's selling rate is below its valuation rate, unless the acting
+# user holds the "Sales Invoice Rate Override" role. Both the "validate"
+# (save-time, early feedback) and "before_submit" (hard stop before
+# submission) lanes call the same idempotent validation function so the
+# rule cannot drift out of sync between the two lanes.
+doc_events = {
+    "Sales Invoice": {
+        "validate": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "sales_invoice_validations.validate_selling_rate_against_valuation_rate"
+        ),
+        "before_submit": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "sales_invoice_validations.validate_selling_rate_against_valuation_rate"
+        ),
+    }
+}
