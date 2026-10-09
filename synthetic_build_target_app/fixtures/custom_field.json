@@ -19,6 +19,16 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Lead-potential_value",
+    "dt": "Lead",
+    "fieldname": "potential_value",
+    "fieldtype": "Currency",
+    "label": "Potential Value",
+    "insert_after": "annual_revenue",
+    "description": "Estimated worth of this lead if converted to a customer."
+  },
+  {
+    "doctype": "Custom Field",
     "name": "Task-priority_tier",
     "dt": "Task",
     "fieldname": "priority_tier",
