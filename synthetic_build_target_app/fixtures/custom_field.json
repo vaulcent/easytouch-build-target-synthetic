@@ -58,5 +58,16 @@
     "label": "Release Pipeline Proof",
     "insert_after": "title",
     "description": "Used only to prove the release validation/promotion pipeline end to end."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Item-is_important_item",
+    "dt": "Item",
+    "fieldname": "is_important_item",
+    "fieldtype": "Check",
+    "label": "Is Important Item",
+    "insert_after": "item_group",
+    "default": "0",
+    "description": "Marks this item as important so the Low Stock Alert for Important Items notification applies when its stock quantity drops below 10."
   }
 ]

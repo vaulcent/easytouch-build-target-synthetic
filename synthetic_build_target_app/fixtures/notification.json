@@ -1,0 +1,21 @@
+[
+  {
+    "doctype": "Notification",
+    "name": "Important Item Low Stock Alert",
+    "subject": "Low Stock Alert: {{ doc.item_code }}",
+    "document_type": "Bin",
+    "event": "Value Change",
+    "value_changed": "actual_qty",
+    "channel": "Email",
+    "enabled": 1,
+    "is_standard": 0,
+    "send_system_notification": 1,
+    "condition": "doc.actual_qty < 10 and frappe.db.get_value('Item', doc.item_code, 'is_important_item')",
+    "message": "<p>Stock for important item <strong>{{ doc.item_code }}</strong> in warehouse {{ doc.warehouse }} has dropped to {{ doc.actual_qty }}, which is below the minimum threshold of 10. Please arrange replenishment.</p>",
+    "recipients": [
+      {
+        "receiver_by_role": "Purchase Manager"
+      }
+    ]
+  }
+]
