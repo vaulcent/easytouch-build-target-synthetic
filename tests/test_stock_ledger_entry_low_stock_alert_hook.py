@@ -29,12 +29,14 @@ def _load_hooks_module():
 class TestStockLedgerEntryLowStockAlertHookWiring(unittest.TestCase):
     """Static checks for the stock-ledger-compatible low stock alert hook.
 
-    ERPNext updates Bin quantities without going through Bin.save(), so the
-    existing "Important Item Low Stock Alert" Notification's own
-    "Value Change" detection never fires on a real site. These checks (no
-    Frappe required) verify the general, non-item/warehouse-hardcoded hook
-    that reads the final Bin quantity after real stock ledger operations
-    and sends that same existing Notification.
+    ERPNext updates Bin quantities without going through Bin.save(), so a
+    Notification configured with "Value Change" on Bin never fires on a
+    real site. These checks (no Frappe required) verify the general,
+    non-item/warehouse-hardcoded hook that reads the final Bin quantity
+    after real stock ledger operations and sends the existing Notification
+    using ordinary trusted Python gating -- never a Notification condition
+    evaluated via frappe.safe_eval, and never Notification.send's own
+    (nonexistent) condition evaluation.
     """
 
     @classmethod
@@ -79,13 +81,37 @@ class TestStockLedgerEntryLowStockAlertHookWiring(unittest.TestCase):
 
     def test_hook_reuses_existing_notification_document(self):
         self.assertIn("Important Item Low Stock Alert", self.source)
-        self.assertIn('frappe.get_cached_doc(', self.source)
+        self.assertIn("frappe.get_cached_doc(", self.source)
         self.assertIn("notification.send(bin_doc)", self.source)
 
     def test_hook_reads_final_bin_for_item_and_warehouse(self):
         self.assertIn('"Bin"', self.source)
         self.assertIn('"item_code": item_code', self.source)
         self.assertIn('"warehouse": warehouse', self.source)
+
+    def test_hook_never_evaluates_notification_condition_via_safe_eval(self):
+        # Notification.send(doc) never evaluates Notification.condition on
+        # its own, and frappe.db access from inside a safe_eval'd
+        # condition is forbidden, so this module must never attempt to
+        # actually evaluate the stored condition string itself (the
+        # explanatory module docstring may still mention safe_eval in
+        # prose, so these checks look for the actual call/attribute
+        # patterns a real evaluation attempt would use).
+        self.assertNotIn("frappe.safe_eval(", self.source)
+        self.assertNotIn("notification.condition", self.source)
+        self.assertNotIn("import get_context", self.source)
+
+    def test_hook_gates_in_trusted_python_on_item_flag_and_bin_quantity(self):
+        # The actual important-item + low-stock gating must be ordinary
+        # trusted Python: a direct Item.is_important_item lookup and a
+        # direct comparison against the final Bin.actual_qty.
+        self.assertIn("is_important_item", self.source)
+        self.assertIn("LOW_STOCK_THRESHOLD", self.source)
+        self.assertIn("bin_doc.actual_qty", self.source)
+        self.assertIn(
+            'frappe.db.get_value("Item", item_code, "is_important_item")',
+            self.source,
+        )
 
 
 class TestStockLedgerEntryLowStockAlertFrappeBacked(unittest.TestCase):
@@ -94,12 +120,18 @@ class TestStockLedgerEntryLowStockAlertFrappeBacked(unittest.TestCase):
     Frappe is intentionally unavailable in this local sandbox, so this case
     skips here. The authoritative post-finish run on a disposable ERPNext
     v16 site must exercise this with real Frappe/ERPNext (no SQLite or
-    mocked Frappe), confirming that a real stock movement (e.g. a
-    submitted Stock Entry) that drops an is_important_item item's
-    warehouse Bin quantity below 10 results in the existing "Important
-    Item Low Stock Alert" Notification being sent to the Purchase Manager
-    role, with the warehouse present in the alert -- without any Bin
-    document save() ever being called directly.
+    mocked Frappe), proving via real submitted stock transactions and exact
+    Notification Log counts that:
+
+    * an important item (Item.is_important_item = 1) whose final Bin
+      actual_qty is 15 (>= 10) does NOT produce a Notification Log;
+    * lowering that same item's Bin actual_qty to 5 (< 10) via a real
+      submitted stock transaction DOES produce exactly one new
+      Notification Log, with no HTTP 500, addressed to the Purchase
+      Manager role and naming the warehouse;
+    * an otherwise identical item with Item.is_important_item = 0 whose
+      final Bin actual_qty drops below 10 does NOT produce a Notification
+      Log.
     """
 
     @classmethod
