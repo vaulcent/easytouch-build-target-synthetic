@@ -1,0 +1,1 @@
+synthetic_build_target_app.synthetic_build_target_app.patches.v1_0.ensure_important_item_low_stock_alert_notification
