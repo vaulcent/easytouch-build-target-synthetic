@@ -1,6 +1,7 @@
 import ast
 import importlib.util
 import os
+import sys
 import types
 import unittest
 
@@ -112,6 +113,202 @@ class TestStockLedgerEntryLowStockAlertHookWiring(unittest.TestCase):
             'frappe.db.get_value("Item", item_code, "is_important_item")',
             self.source,
         )
+
+
+class _FakeNotification:
+    """Records every document send_important_item_low_stock_alert sends."""
+
+    def __init__(self, enabled=1):
+        self.enabled = enabled
+        self.sent_with = []
+
+    def send(self, doc):
+        self.sent_with.append(doc)
+
+
+class _FakeBin:
+    def __init__(self, name, actual_qty):
+        self.name = name
+        self.actual_qty = actual_qty
+
+
+class _FakeFrappeDB:
+    """Minimal frappe.db stand-in that records lookup call ordering."""
+
+    def __init__(self, bin_name, item_important_value):
+        self._bin_name = bin_name
+        self._item_important_value = item_important_value
+        self.after_commit = types.SimpleNamespace(add=lambda callback: None)
+        self.item_lookup_calls = []
+        self.bin_lookup_calls = []
+
+    def exists(self, doctype, name):
+        assert doctype == "Notification"
+        return True
+
+    def get_value(self, doctype, filters, fieldname=None):
+        if doctype == "Bin":
+            self.bin_lookup_calls.append((filters, fieldname))
+            return self._bin_name
+        if doctype == "Item":
+            # Real call shape: frappe.db.get_value("Item", item_code,
+            # "is_important_item") -- recorded here so tests can prove
+            # whether this Item lookup was ever reached relative to the
+            # LOW_STOCK_THRESHOLD comparison on the Bin quantity.
+            self.item_lookup_calls.append((filters, fieldname))
+            return self._item_important_value
+        raise AssertionError("unexpected doctype in get_value: %s" % doctype)
+
+
+class _FakeFrappe:
+    """Minimal frappe module stand-in sufficient for stock_ledger_alerts."""
+
+    def __init__(self, bin_doc, notification, bin_name, item_important_value):
+        self.db = _FakeFrappeDB(bin_name, item_important_value)
+        self._bin_doc = bin_doc
+        self._notification = notification
+        self.get_doc_calls = []
+
+    def get_cached_doc(self, doctype, name):
+        assert doctype == "Notification"
+        return self._notification
+
+    def get_doc(self, doctype, name):
+        assert doctype == "Bin"
+        self.get_doc_calls.append(name)
+        return self._bin_doc
+
+
+def _load_module_against_fake_frappe(fake_frappe):
+    """Exec the real stock_ledger_alerts.py source with ``frappe`` stubbed.
+
+    This loads the actual module source from disk (not a re-typed copy),
+    substituting only the ``frappe`` dependency, so the test exercises the
+    real ``send_important_item_low_stock_alert`` function body -- its
+    LOW_STOCK_THRESHOLD comparison and important-item lookup ordering --
+    rather than merely grepping the module text.
+    """
+    previous_frappe = sys.modules.get("frappe")
+    sys.modules["frappe"] = fake_frappe
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "stock_ledger_alerts_under_test_%d" % id(fake_frappe), MODULE_PATH
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        if previous_frappe is not None:
+            sys.modules["frappe"] = previous_frappe
+        else:
+            del sys.modules["frappe"]
+    return module
+
+
+class TestSendImportantItemLowStockAlertFunctionBehaviour(unittest.TestCase):
+    """Deterministic regression guard for the current correct behaviour.
+
+    These cases load the real ``send_important_item_low_stock_alert``
+    function source and execute it against a minimal, fully-controlled
+    ``frappe`` stand-in (no SQLite, no network, no Frappe installation
+    required) solely to pin down two concrete behaviours of the *current*
+    implementation that a future refactor could silently break:
+
+    1. When the final Bin ``actual_qty`` is at or above
+       ``LOW_STOCK_THRESHOLD`` (10), the function must return without ever
+       performing the ``Item.is_important_item`` lookup and without ever
+       calling ``notification.send``.
+    2. When the Bin quantity *is* below the threshold but the Item is not
+       an important item, the function must still perform the
+       ``Item.is_important_item`` lookup (proving the threshold check runs
+       first and genuinely gates forward) but must return before reaching
+       ``notification.send``.
+
+    A positive control (important item, qty below threshold) proves the
+    harness itself is wired correctly and that ``notification.send`` is
+    reachable at all, so the two guard cases above are not trivially
+    passing because ``send`` is unreachable for unrelated reasons.
+    """
+
+    def test_returns_without_item_lookup_when_qty_at_threshold(self):
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-AT-THRESHOLD", actual_qty=LOW_STOCK_THRESHOLD_VALUE)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        module.send_important_item_low_stock_alert("ITEM-IMPORTANT", "WH-1")
+
+        self.assertEqual(
+            fake_frappe.db.item_lookup_calls,
+            [],
+            "actual_qty == LOW_STOCK_THRESHOLD must return before the "
+            "Item.is_important_item lookup is ever performed",
+        )
+        self.assertEqual(notification.sent_with, [])
+
+    def test_returns_without_item_lookup_when_qty_above_threshold(self):
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-ABOVE-THRESHOLD", actual_qty=15)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        module.send_important_item_low_stock_alert("ITEM-IMPORTANT", "WH-1")
+
+        self.assertEqual(
+            fake_frappe.db.item_lookup_calls,
+            [],
+            "actual_qty >= LOW_STOCK_THRESHOLD must return before the "
+            "Item.is_important_item lookup is ever performed",
+        )
+        self.assertEqual(notification.sent_with, [])
+
+    def test_returns_for_unimportant_item_before_notification_send(self):
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-BELOW-THRESHOLD", actual_qty=5)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=0
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        module.send_important_item_low_stock_alert("ITEM-UNIMPORTANT", "WH-1")
+
+        self.assertEqual(
+            fake_frappe.db.item_lookup_calls,
+            [("ITEM-UNIMPORTANT", "is_important_item")],
+            "the LOW_STOCK_THRESHOLD comparison must have already passed, "
+            "reaching the Item.is_important_item lookup",
+        )
+        self.assertEqual(
+            notification.sent_with,
+            [],
+            "an unimportant item must never reach notification.send(bin_doc)",
+        )
+
+    def test_sends_when_important_item_and_qty_below_threshold(self):
+        # Positive control: proves notification.send is reachable at all
+        # through this exact code path, so the two guard cases above are
+        # not passing merely because send() is unreachable for unrelated
+        # reasons.
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-POSITIVE-CONTROL", actual_qty=5)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        module.send_important_item_low_stock_alert("ITEM-IMPORTANT", "WH-1")
+
+        self.assertEqual(
+            fake_frappe.db.item_lookup_calls,
+            [("ITEM-IMPORTANT", "is_important_item")],
+        )
+        self.assertEqual(notification.sent_with, [bin_doc])
+
+
+LOW_STOCK_THRESHOLD_VALUE = 10
 
 
 class TestStockLedgerEntryLowStockAlertFrappeBacked(unittest.TestCase):
