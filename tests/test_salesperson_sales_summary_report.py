@@ -11,8 +11,10 @@ file) under
 check of that artifact shape. ``TestSalespersonSalesSummaryReportFrappeBacked``
 is the authoritative behavioral evidence: it seeds real ERPNext v16
 masters/documents, submits a real Sales Invoice with a real Sales Team
-allocation, and executes the actual .sql file via ``frappe.db.sql`` to
-assert the returned, aggregated metrics -- not source text.
+allocation, executes the actual .sql file directly via ``frappe.db.sql``,
+and then executes the same installed Report through
+``frappe.desk.query_report.run`` to assert the returned, aggregated
+metrics -- not source text.
 """
 
 import importlib.util
@@ -97,6 +99,7 @@ class TestSalespersonSalesSummaryReportFrappeBacked(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         import frappe
+        import frappe.desk.query_report  # noqa: F401 - used via fully-qualified call below
         from frappe.utils import add_days, nowdate
 
         cls.frappe = frappe
@@ -121,9 +124,47 @@ class TestSalespersonSalesSummaryReportFrappeBacked(unittest.TestCase):
         cls.item_code = cls._ensure_non_stock_item()
         cls.sales_person = cls._ensure_sales_person()
         cls.price_list = cls._ensure_selling_price_list()
+        cls._ensure_report_synced()
 
         cls.invoice_name = cls._create_and_submit_invoice()
         frappe.db.commit()
+
+    @classmethod
+    def _ensure_report_synced(cls):
+        """Ensure the real "Report" DocType record exists for this
+        report (so ``frappe.desk.query_report.run`` can load and execute
+        the actual installed Report, not just the .sql file in
+        isolation), and that its database ``query`` field is backfilled
+        from the shipped, read-only .sql file. Standard reports are
+        normally created on ``bench migrate`` and the ``query`` field is
+        kept in sync by this app's ``after_migrate`` hook
+        (``synthetic_build_target_app.synthetic_build_target_app.install.
+        ensure_salesperson_sales_summary_report_query``); this calls that
+        same idempotent function directly so the test is self-sufficient
+        even when run outside a full migrate cycle.
+        """
+        frappe = cls.frappe
+        if not frappe.db.exists("Report", "Salesperson Sales Summary"):
+            frappe.reload_doc(
+                "synthetic_build_target_app", "report", "salesperson_sales_summary"
+            )
+            frappe.db.commit()
+
+        from synthetic_build_target_app.synthetic_build_target_app.install import (
+            ensure_salesperson_sales_summary_report_query,
+        )
+
+        ensure_salesperson_sales_summary_report_query()
+        frappe.db.commit()
+
+        stored_query = frappe.db.get_value(
+            "Report", "Salesperson Sales Summary", "query"
+        )
+        assert stored_query, (
+            "the installed Report's database 'query' field must be "
+            "backfilled from salesperson_sales_summary.sql before "
+            "frappe.desk.query_report.run can execute it"
+        )
 
     @classmethod
     def _ensure_company(cls):
@@ -372,6 +413,56 @@ class TestSalespersonSalesSummaryReportFrappeBacked(unittest.TestCase):
             as_dict=True,
         )
 
+    def _run_installed_report(self, from_date, to_date):
+        """Execute the real, installed Report through the fully
+        qualified ``frappe.desk.query_report.run`` entry point (the same
+        function the Frappe desk UI calls), not just the raw .sql file
+        in isolation."""
+        import frappe.desk.query_report
+
+        return frappe.desk.query_report.run(
+            report_name="Salesperson Sales Summary",
+            filters={"from_date": from_date, "to_date": to_date},
+        )
+
+    @staticmethod
+    def _rows_as_dicts(result):
+        """Normalize ``frappe.desk.query_report.run``'s ``result["result"]``
+        into a list of plain dicts keyed by fieldname.
+
+        Real ERPNext v16 always returns row data as a list of lists
+        (positionally matching ``result["columns"]``) once the Report
+        passes through the full ``run()`` pipeline, even when the
+        underlying SQL itself was executed with ``as_dict=True`` and the
+        Report JSON leaves ``columns`` empty (auto-derived columns).
+        This helper tolerates both that real list-of-lists shape and a
+        plain list-of-dicts shape, so the assertions below exercise the
+        actual returned data rather than assuming one specific internal
+        representation.
+        """
+        data = result.get("result") or []
+        if not data:
+            return []
+
+        if isinstance(data[0], dict):
+            return list(data)
+
+        columns = result.get("columns") or []
+        fieldnames = []
+        for column in columns:
+            if isinstance(column, dict):
+                fieldnames.append(column.get("fieldname") or column.get("label"))
+            else:
+                fieldnames.append(column)
+
+        rows = []
+        for raw_row in data:
+            if isinstance(raw_row, dict):
+                rows.append(raw_row)
+                continue
+            rows.append(dict(zip(fieldnames, raw_row)))
+        return rows
+
     def test_report_sql_aggregates_metrics_for_the_selected_date_range(self):
         rows = self._run_report_sql(self.from_date, self.to_date)
         matches = [r for r in rows if r.salesperson == self.sales_person]
@@ -399,6 +490,59 @@ class TestSalespersonSalesSummaryReportFrappeBacked(unittest.TestCase):
             "a date range after the invoice's posting_date must not "
             "return the seeded salesperson's row",
         )
+
+    def test_installed_report_runs_through_query_report_and_matches_sql(self):
+        """Execute the real, installed Report via
+        ``frappe.desk.query_report.run`` (not just the raw .sql file) and
+        assert its returned data matches the independent SQL evidence
+        for every requested metric."""
+        expected_rows = self._run_report_sql(self.from_date, self.to_date)
+        expected = {r.salesperson: r for r in expected_rows}
+        self.assertIn(self.sales_person, expected)
+
+        result = self._run_installed_report(self.from_date, self.to_date)
+
+        data = self._rows_as_dicts(result)
+        matches = [row for row in data if row.get("salesperson") == self.sales_person]
+        self.assertEqual(
+            len(matches),
+            1,
+            "frappe.desk.query_report.run must return exactly one row "
+            "for the seeded salesperson within the requested date range",
+        )
+        row = matches[0]
+        expected_row = expected[self.sales_person]
+
+        self.assertAlmostEqual(
+            float(row["total_sales"]), float(expected_row.total_sales), places=2
+        )
+        self.assertAlmostEqual(
+            float(row["collected_amount"]),
+            float(expected_row.collected_amount),
+            places=2,
+        )
+        self.assertAlmostEqual(
+            float(row["outstanding_amount"]),
+            float(expected_row.outstanding_amount),
+            places=2,
+        )
+        self.assertAlmostEqual(
+            float(row["gross_profit"]), float(expected_row.gross_profit), places=2
+        )
+        self.assertEqual(
+            int(row["number_of_customers"]), int(expected_row.number_of_customers)
+        )
+
+        # Also prove the requested date-range filter is honored end to end
+        # through the real report runner, not only the raw SQL file.
+        outside_from = self.frappe.utils.add_days(self.to_date, 1)
+        outside_to = self.frappe.utils.add_days(self.to_date, 2)
+        outside_result = self._run_installed_report(outside_from, outside_to)
+        outside_data = self._rows_as_dicts(outside_result)
+        outside_matches = [
+            row for row in outside_data if row.get("salesperson") == self.sales_person
+        ]
+        self.assertEqual(outside_matches, [])
 
 
 if __name__ == "__main__":
