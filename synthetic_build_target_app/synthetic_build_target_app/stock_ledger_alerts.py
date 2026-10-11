@@ -1,13 +1,36 @@
-"""General stock-ledger-compatible hook for the Important Item Low Stock Alert.
+"""Stock-transaction hook for the Important Item Low Stock Alert.
 
-ERPNext updates ``Bin`` quantities (``actual_qty``) via direct database
-writes as part of posting Stock Ledger Entries for Stock Entry, Delivery
-Note, Purchase Receipt, Sales Invoice with ``update_stock``, and every other
-stock transaction. Those direct writes do not go through ``Bin.save()``, so
-a Notification configured with ``event = "Value Change"`` on the ``Bin``
-DocType never observes a change and therefore never fires on a real site.
+Real ERPNext v16 validation proved that Stock Ledger Entry rows are
+written via a direct ``db_insert`` as part of posting a stock transaction
+-- they never go through ``frappe.get_doc(...).submit()`` /
+``on_submit`` document-event dispatch themselves. Hooking
+``Stock Ledger Entry`` -- ``on_submit`` (the previous approach) therefore
+never fires on a real site; it is an ineffective hook and has been
+removed.
 
-Real ERPNext v16 validation also rejects two things a naive fix might try:
+This module instead hooks ``on_submit`` of the real, originating
+submittable stock transactions that a user actually submits -- ``Stock
+Entry``, ``Delivery Note``, ``Purchase Receipt``, and ``Sales Invoice``
+(the latter only actually moves stock when ``update_stock`` is set, which
+this module does not need to special-case: if there is no stock movement
+there is simply no low/important item to react to). Those ``on_submit``
+hooks are real Frappe document-lifecycle events that do fire.
+
+ERPNext still updates ``Bin`` quantities (``actual_qty``) via direct
+database writes rather than ``Bin.save()``, so the final authoritative
+quantity is only guaranteed to be correct once the enclosing database
+transaction has committed. This module therefore schedules an
+after-commit callback per item/warehouse pair found on the submitted
+transaction's child rows, and only reads the Bin and performs the
+important-item + low-stock gating once that commit has actually happened.
+
+The warehouse context is read generically from whichever real child-row
+field the given transaction type uses (``warehouse`` for Delivery Note /
+Purchase Receipt / Sales Invoice rows, ``s_warehouse`` / ``t_warehouse``
+for Stock Entry rows), never hardcoded to one item or warehouse.
+
+Real ERPNext v16 validation also rejects two things a naive fix might
+try:
 
 * A Notification ``condition`` that references ``doc.is_important_item``
   on ``Bin`` -- ``Bin`` has no such field, so DocType metadata validation
@@ -22,19 +45,14 @@ configured with ``event = "Custom"`` (never auto-wired to fire on ordinary
 Bin saves/value-changes) and a ``condition`` limited to a real Bin field
 (``doc.actual_qty < 10``, used only for the Notification doctype's own
 save/migrate-time self-check of the condition string -- never evaluated by
-this module).
+this module). The Notification's ``channel`` is ``System Notification``,
+so dispatch creates an in-app Notification Log for the Purchase Manager
+recipient without requiring any outgoing Email Account on the site.
 
-This module hooks into ``Stock Ledger Entry`` -- ``on_submit``, which
-fires for *every* real stock movement regardless of which ERPNext
-transaction produced it, without hardcoding any specific item, warehouse,
-or transaction type. It schedules an after-commit callback: by the time
-the enclosing database transaction commits, ERPNext has already finished
-updating the Bin for the affected item/warehouse, so reading the Bin's
-quantity at that point reflects the final, authoritative post-movement
-value. This module then performs the actual gating in ordinary trusted
-Python -- requiring BOTH that ``Item.is_important_item`` is true AND that
-the final ``Bin.actual_qty`` is below the threshold -- before calling the
-existing Notification's ``send(bin_doc)`` directly. It never relies on
+This module performs the actual gating in ordinary trusted Python --
+requiring BOTH that ``Item.is_important_item`` is true AND that the final
+``Bin.actual_qty`` is below the threshold -- before calling the existing
+Notification's ``send(bin_doc)`` directly. It never relies on
 ``Notification.send`` to evaluate its stored condition, and never calls
 ``frappe.safe_eval`` on that condition string itself.
 """
@@ -52,32 +70,54 @@ IMPORTANT_ITEM_LOW_STOCK_ALERT = "Important Item Low Stock Alert"
 #: string itself.
 LOW_STOCK_THRESHOLD = 10
 
+#: Real child-row field names, across the real submittable stock
+#: transactions this module hooks, that can carry a warehouse for a given
+#: item row. Checked generically -- never hardcoded to one transaction
+#: type, item, or warehouse.
+_WAREHOUSE_FIELDS = ("warehouse", "s_warehouse", "t_warehouse")
+
+
+def _iter_item_warehouse_pairs(doc):
+    """Yield every real ``(item_code, warehouse)`` pair on ``doc``'s rows.
+
+    ``doc`` is the real submitted stock transaction (Stock Entry, Delivery
+    Note, Purchase Receipt, or Sales Invoice). Reads only its ``items``
+    child rows and only the real warehouse fields those rows define.
+    """
+    for row in doc.get("items") or []:
+        item_code = row.get("item_code")
+        if not item_code:
+            continue
+        for warehouse_field in _WAREHOUSE_FIELDS:
+            warehouse = row.get(warehouse_field)
+            if warehouse:
+                yield item_code, warehouse
+
 
 def queue_important_item_low_stock_alert(doc, method=None) -> None:
-    """Schedule a low-stock check for ``doc``'s item/warehouse after commit.
+    """Schedule a low-stock check for every item/warehouse on ``doc``.
 
-    Wired to ``Stock Ledger Entry`` -- ``on_submit`` via hooks.py, so this
-    runs for every real stock ledger posting produced by any ERPNext stock
-    transaction. ``doc`` here is the Stock Ledger Entry being submitted;
-    its ``item_code``/``warehouse`` are read generically, never hardcoded.
+    Wired to ``on_submit`` of the real originating stock transactions
+    (Stock Entry, Delivery Note, Purchase Receipt, Sales Invoice) via
+    hooks.py, so this runs for every real stock movement a user actually
+    submits. ``doc`` here is that submitted transaction; its item/
+    warehouse pairs are read generically off its rows, never hardcoded.
     """
-    item_code = doc.get("item_code")
-    warehouse = doc.get("warehouse")
-    if not item_code or not warehouse:
-        return
-
-    frappe.db.after_commit.add(
-        lambda: send_important_item_low_stock_alert(item_code, warehouse)
-    )
+    for item_code, warehouse in _iter_item_warehouse_pairs(doc):
+        frappe.db.after_commit.add(
+            lambda ic=item_code, wh=warehouse: send_important_item_low_stock_alert(
+                ic, wh
+            )
+        )
 
 
 def send_important_item_low_stock_alert(item_code: str, warehouse: str) -> None:
     """Read the final Bin quantity for ``item_code``/``warehouse`` and send
     the existing "Important Item Low Stock Alert" Notification if due.
 
-    Runs after the enclosing stock ledger transaction has committed, so the
-    Bin quantity read here is the final, authoritative post-movement value
-    -- independent of whether ERPNext updated the Bin via ``save()`` or a
+    Runs after the enclosing stock transaction has committed, so the Bin
+    quantity read here is the final, authoritative post-movement value --
+    independent of whether ERPNext updated the Bin via ``save()`` or a
     direct database write for this particular transaction type.
 
     The gating decision is made entirely in ordinary trusted Python: BOTH
