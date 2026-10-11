@@ -18,6 +18,14 @@ EXPECTED_DOTTED_PATH = (
     "stock_ledger_alerts.queue_important_item_low_stock_alert"
 )
 
+#: Real submittable stock transactions this hook must be wired to.
+EXPECTED_HOOKED_DOCTYPES = (
+    "Stock Entry",
+    "Delivery Note",
+    "Purchase Receipt",
+    "Sales Invoice",
+)
+
 
 def _load_hooks_module():
     with open(HOOKS_PATH, "r", encoding="utf-8") as handle:
@@ -27,17 +35,21 @@ def _load_hooks_module():
     return module
 
 
-class TestStockLedgerEntryLowStockAlertHookWiring(unittest.TestCase):
-    """Static checks for the stock-ledger-compatible low stock alert hook.
+class TestStockTransactionLowStockAlertHookWiring(unittest.TestCase):
+    """Static checks for the real-stock-transaction low stock alert hook.
 
-    ERPNext updates Bin quantities without going through Bin.save(), so a
-    Notification configured with "Value Change" on Bin never fires on a
-    real site. These checks (no Frappe required) verify the general,
-    non-item/warehouse-hardcoded hook that reads the final Bin quantity
-    after real stock ledger operations and sends the existing Notification
-    using ordinary trusted Python gating -- never a Notification condition
-    evaluated via frappe.safe_eval, and never Notification.send's own
-    (nonexistent) condition evaluation.
+    Real validation proved that ERPNext's internally written Stock Ledger
+    Entry rows are inserted via a direct ``db_insert`` as part of posting a
+    stock transaction, and never go through ``on_submit`` document-event
+    dispatch themselves -- so a "Stock Ledger Entry" -- "on_submit" hook is
+    never actually called on a real site and must not be preserved. These
+    checks (no Frappe required) verify the repaired hook instead targets
+    ``on_submit`` of the real, originating submittable stock transactions
+    (Stock Entry, Delivery Note, Purchase Receipt, Sales Invoice), reads
+    the final Bin quantity after real stock operations, and sends the
+    existing Notification using ordinary trusted Python gating -- never a
+    Notification condition evaluated via frappe.safe_eval, and never
+    Notification.send's own (nonexistent) condition evaluation.
     """
 
     @classmethod
@@ -50,14 +62,19 @@ class TestStockLedgerEntryLowStockAlertHookWiring(unittest.TestCase):
     def test_module_file_exists(self):
         self.assertTrue(os.path.isfile(MODULE_PATH))
 
-    def test_stock_ledger_entry_on_submit_is_hooked(self):
-        self.assertIn("Stock Ledger Entry", self.hooks.doc_events)
-        events = self.hooks.doc_events["Stock Ledger Entry"]
-        self.assertIn("on_submit", events)
-        self.assertEqual(events["on_submit"], EXPECTED_DOTTED_PATH)
+    def test_stock_ledger_entry_hook_is_not_preserved(self):
+        # The ineffective Stock Ledger Entry on_submit hook must be
+        # removed entirely, not merely left alongside the real fix.
+        self.assertNotIn("Stock Ledger Entry", self.hooks.doc_events)
 
-    def test_sales_invoice_hooks_untouched(self):
-        self.assertIn("Sales Invoice", self.hooks.doc_events)
+    def test_real_stock_transactions_on_submit_are_hooked(self):
+        for doctype in EXPECTED_HOOKED_DOCTYPES:
+            self.assertIn(doctype, self.hooks.doc_events)
+            events = self.hooks.doc_events[doctype]
+            self.assertIn("on_submit", events)
+            self.assertEqual(events["on_submit"], EXPECTED_DOTTED_PATH)
+
+    def test_sales_invoice_validate_and_before_submit_hooks_untouched(self):
         events = self.hooks.doc_events["Sales Invoice"]
         self.assertIn("validate", events)
         self.assertIn("before_submit", events)
@@ -75,10 +92,14 @@ class TestStockLedgerEntryLowStockAlertHookWiring(unittest.TestCase):
         self.assertIn("frappe.db.after_commit.add", self.source)
 
     def test_hook_reads_item_and_warehouse_generically_not_hardcoded(self):
-        # item_code/warehouse must be read off the submitted Stock Ledger
-        # Entry doc generically; no specific item/warehouse name literal.
-        self.assertIn('doc.get("item_code")', self.source)
-        self.assertIn('doc.get("warehouse")', self.source)
+        # item_code/warehouse must be read off the submitted transaction's
+        # rows generically; no specific item/warehouse name literal, and
+        # every real warehouse field shape (plain "warehouse" as well as
+        # Stock Entry's s_warehouse/t_warehouse) must be covered.
+        self.assertIn('row.get("item_code")', self.source)
+        self.assertIn('"warehouse"', self.source)
+        self.assertIn('"s_warehouse"', self.source)
+        self.assertIn('"t_warehouse"', self.source)
 
     def test_hook_reuses_existing_notification_document(self):
         self.assertIn("Important Item Low Stock Alert", self.source)
@@ -204,6 +225,80 @@ def _load_module_against_fake_frappe(fake_frappe):
     return module
 
 
+LOW_STOCK_THRESHOLD_VALUE = 10
+
+
+class TestQueueImportantItemLowStockAlertCollectsRealWarehouseFields(
+    unittest.TestCase
+):
+    """Proves ``queue_important_item_low_stock_alert`` reads every real
+    warehouse field shape off a submitted transaction's rows generically,
+    without any Frappe installation required.
+    """
+
+    def test_collects_plain_warehouse_field(self):
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-1", actual_qty=5)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        queued = []
+        fake_frappe.db.after_commit = types.SimpleNamespace(
+            add=lambda callback: queued.append(callback)
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        doc = {"items": [{"item_code": "ITEM-A", "warehouse": "WH-A"}]}
+        module.queue_important_item_low_stock_alert(doc)
+
+        self.assertEqual(len(queued), 1)
+        queued[0]()
+        self.assertEqual(notification.sent_with, [bin_doc])
+
+    def test_collects_stock_entry_source_and_target_warehouses(self):
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-2", actual_qty=5)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        queued = []
+        fake_frappe.db.after_commit = types.SimpleNamespace(
+            add=lambda callback: queued.append(callback)
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        doc = {
+            "items": [
+                {
+                    "item_code": "ITEM-B",
+                    "s_warehouse": "WH-SOURCE",
+                    "t_warehouse": "WH-TARGET",
+                }
+            ]
+        }
+        module.queue_important_item_low_stock_alert(doc)
+
+        # Both the source and target warehouse must be scheduled.
+        self.assertEqual(len(queued), 2)
+
+    def test_rows_without_item_code_are_skipped(self):
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-3", actual_qty=5)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        queued = []
+        fake_frappe.db.after_commit = types.SimpleNamespace(
+            add=lambda callback: queued.append(callback)
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        doc = {"items": [{"warehouse": "WH-A"}]}
+        module.queue_important_item_low_stock_alert(doc)
+
+        self.assertEqual(queued, [])
+
+
 class TestSendImportantItemLowStockAlertFunctionBehaviour(unittest.TestCase):
     """Deterministic regression guard for the current correct behaviour.
 
@@ -306,44 +401,6 @@ class TestSendImportantItemLowStockAlertFunctionBehaviour(unittest.TestCase):
             [("ITEM-IMPORTANT", "is_important_item")],
         )
         self.assertEqual(notification.sent_with, [bin_doc])
-
-
-LOW_STOCK_THRESHOLD_VALUE = 10
-
-
-class TestStockLedgerEntryLowStockAlertFrappeBacked(unittest.TestCase):
-    """Behavioral evidence requires a real Frappe/ERPNext v16 site.
-
-    Frappe is intentionally unavailable in this local sandbox, so this case
-    skips here. The authoritative post-finish run on a disposable ERPNext
-    v16 site must exercise this with real Frappe/ERPNext (no SQLite or
-    mocked Frappe), proving via real submitted stock transactions and exact
-    Notification Log counts that:
-
-    * an important item (Item.is_important_item = 1) whose final Bin
-      actual_qty is 15 (>= 10) does NOT produce a Notification Log;
-    * lowering that same item's Bin actual_qty to 5 (< 10) via a real
-      submitted stock transaction DOES produce exactly one new
-      Notification Log, with no HTTP 500, addressed to the Purchase
-      Manager role and naming the warehouse;
-    * an otherwise identical item with Item.is_important_item = 0 whose
-      final Bin actual_qty drops below 10 does NOT produce a Notification
-      Log.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        if importlib.util.find_spec("frappe") is None:
-            raise unittest.SkipTest(
-                "Frappe is not installed in this local sandbox; behavioral "
-                "evidence must come from a real ERPNext v16 site run."
-            )
-
-    def test_placeholder_requires_real_frappe_site(self):
-        self.skipTest(
-            "Run against a disposable ERPNext v16 site for authoritative "
-            "evidence; not executed in this local sandbox."
-        )
 
 
 if __name__ == "__main__":
