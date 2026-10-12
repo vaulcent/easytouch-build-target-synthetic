@@ -18,13 +18,21 @@ EXPECTED_DOTTED_PATH = (
     "stock_ledger_alerts.queue_important_item_low_stock_alert"
 )
 
-#: Real submittable stock transactions this hook must be wired to.
+#: Real submittable/cancellable transactions whose lifecycle changes Bin
+#: quantities and that this hook must therefore be wired to, for BOTH
+#: on_submit and on_cancel (either direction can cross the low-stock
+#: threshold).
 EXPECTED_HOOKED_DOCTYPES = (
     "Stock Entry",
     "Delivery Note",
     "Purchase Receipt",
+    "Purchase Invoice",
+    "Stock Reconciliation",
     "Sales Invoice",
 )
+
+#: Doctypes whose stock impact depends on their own update_stock flag.
+INVOICE_DOCTYPES_REQUIRING_UPDATE_STOCK = ("Sales Invoice", "Purchase Invoice")
 
 
 def _load_hooks_module():
@@ -44,8 +52,9 @@ class TestStockTransactionLowStockAlertHookWiring(unittest.TestCase):
     dispatch themselves -- so a "Stock Ledger Entry" -- "on_submit" hook is
     never actually called on a real site and must not be preserved. These
     checks (no Frappe required) verify the repaired hook instead targets
-    ``on_submit`` of the real, originating submittable stock transactions
-    (Stock Entry, Delivery Note, Purchase Receipt, Sales Invoice), reads
+    BOTH ``on_submit`` and ``on_cancel`` of every real, originating
+    stock-changing transaction (Stock Entry, Delivery Note, Purchase
+    Receipt, Purchase Invoice, Stock Reconciliation, Sales Invoice), reads
     the final Bin quantity after real stock operations, and sends the
     existing Notification using ordinary trusted Python gating -- never a
     Notification condition evaluated via frappe.safe_eval, and never
@@ -67,20 +76,31 @@ class TestStockTransactionLowStockAlertHookWiring(unittest.TestCase):
         # removed entirely, not merely left alongside the real fix.
         self.assertNotIn("Stock Ledger Entry", self.hooks.doc_events)
 
+    def _assert_event_wired(self, doctype, event):
+        self.assertIn(doctype, self.hooks.doc_events)
+        events = self.hooks.doc_events[doctype]
+        self.assertIn(event, events, f"{doctype} is missing a {event} hook")
+        handler = events[event]
+        if isinstance(handler, (list, tuple)):
+            # Sales Invoice's real on_submit event also fires the
+            # separate "create a Project for this invoice" hook (see
+            # sales_invoice_project.py); this low-stock-alert hook must
+            # still be one of the real handlers wired to it.
+            self.assertIn(EXPECTED_DOTTED_PATH, handler)
+        else:
+            self.assertEqual(handler, EXPECTED_DOTTED_PATH)
+
     def test_real_stock_transactions_on_submit_are_hooked(self):
         for doctype in EXPECTED_HOOKED_DOCTYPES:
-            self.assertIn(doctype, self.hooks.doc_events)
-            events = self.hooks.doc_events[doctype]
-            self.assertIn("on_submit", events)
-            on_submit = events["on_submit"]
-            if isinstance(on_submit, (list, tuple)):
-                # Sales Invoice's real on_submit event also fires the
-                # separate "create a Project for this invoice" hook (see
-                # sales_invoice_project.py); this low-stock-alert hook
-                # must still be one of the real handlers wired to it.
-                self.assertIn(EXPECTED_DOTTED_PATH, on_submit)
-            else:
-                self.assertEqual(on_submit, EXPECTED_DOTTED_PATH)
+            self._assert_event_wired(doctype, "on_submit")
+
+    def test_real_stock_transactions_on_cancel_are_also_hooked(self):
+        # Either direction (submit or cancel) can cross the low-stock
+        # threshold -- a cancelled Delivery Note gives stock back, a
+        # cancelled Purchase Receipt takes it away again -- so on_cancel
+        # must be registered for every one of these doctypes too.
+        for doctype in EXPECTED_HOOKED_DOCTYPES:
+            self._assert_event_wired(doctype, "on_cancel")
 
     def test_sales_invoice_validate_and_before_submit_hooks_untouched(self):
         events = self.hooks.doc_events["Sales Invoice"]
@@ -100,14 +120,25 @@ class TestStockTransactionLowStockAlertHookWiring(unittest.TestCase):
         self.assertIn("frappe.db.after_commit.add", self.source)
 
     def test_hook_reads_item_and_warehouse_generically_not_hardcoded(self):
-        # item_code/warehouse must be read off the submitted transaction's
-        # rows generically; no specific item/warehouse name literal, and
-        # every real warehouse field shape (plain "warehouse" as well as
-        # Stock Entry's s_warehouse/t_warehouse) must be covered.
+        # item_code/warehouse must be read off the submitted/cancelled
+        # transaction's rows generically; no specific item/warehouse name
+        # literal, and every real warehouse field shape (plain
+        # "warehouse" as well as Stock Entry's s_warehouse/t_warehouse)
+        # must be covered.
         self.assertIn('row.get("item_code")', self.source)
         self.assertIn('"warehouse"', self.source)
         self.assertIn('"s_warehouse"', self.source)
         self.assertIn('"t_warehouse"', self.source)
+
+    def test_hook_gates_invoice_doctypes_on_update_stock(self):
+        # Sales Invoice and Purchase Invoice never move stock unless
+        # update_stock is enabled; the module must gate on that flag for
+        # exactly those two doctypes before ever queuing a check.
+        self.assertIn("_INVOICE_DOCTYPES_REQUIRING_UPDATE_STOCK", self.source)
+        self.assertIn('"Sales Invoice"', self.source)
+        self.assertIn('"Purchase Invoice"', self.source)
+        self.assertIn('doc.get("doctype")', self.source)
+        self.assertIn('"update_stock"', self.source)
 
     def test_hook_reuses_existing_notification_document(self):
         self.assertIn("Important Item Low Stock Alert", self.source)
@@ -240,8 +271,8 @@ class TestQueueImportantItemLowStockAlertCollectsRealWarehouseFields(
     unittest.TestCase
 ):
     """Proves ``queue_important_item_low_stock_alert`` reads every real
-    warehouse field shape off a submitted transaction's rows generically,
-    without any Frappe installation required.
+    warehouse field shape off a submitted/cancelled transaction's rows
+    generically, without any Frappe installation required.
     """
 
     def test_collects_plain_warehouse_field(self):
@@ -256,7 +287,10 @@ class TestQueueImportantItemLowStockAlertCollectsRealWarehouseFields(
         )
         module = _load_module_against_fake_frappe(fake_frappe)
 
-        doc = {"items": [{"item_code": "ITEM-A", "warehouse": "WH-A"}]}
+        doc = {
+            "doctype": "Delivery Note",
+            "items": [{"item_code": "ITEM-A", "warehouse": "WH-A"}],
+        }
         module.queue_important_item_low_stock_alert(doc)
 
         self.assertEqual(len(queued), 1)
@@ -276,13 +310,14 @@ class TestQueueImportantItemLowStockAlertCollectsRealWarehouseFields(
         module = _load_module_against_fake_frappe(fake_frappe)
 
         doc = {
+            "doctype": "Stock Entry",
             "items": [
                 {
                     "item_code": "ITEM-B",
                     "s_warehouse": "WH-SOURCE",
                     "t_warehouse": "WH-TARGET",
                 }
-            ]
+            ],
         }
         module.queue_important_item_low_stock_alert(doc)
 
@@ -301,10 +336,75 @@ class TestQueueImportantItemLowStockAlertCollectsRealWarehouseFields(
         )
         module = _load_module_against_fake_frappe(fake_frappe)
 
-        doc = {"items": [{"warehouse": "WH-A"}]}
+        doc = {"doctype": "Delivery Note", "items": [{"warehouse": "WH-A"}]}
         module.queue_important_item_low_stock_alert(doc)
 
         self.assertEqual(queued, [])
+
+    def test_sales_invoice_without_update_stock_is_never_queued(self):
+        # A plain Sales Invoice (update_stock unset) never moves stock;
+        # queuing anyway risks a false alert for an unrelated, already-low
+        # Bin this invoice never touched.
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-SI-NO-UPDATE-STOCK", actual_qty=5)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        queued = []
+        fake_frappe.db.after_commit = types.SimpleNamespace(
+            add=lambda callback: queued.append(callback)
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        doc = {
+            "doctype": "Sales Invoice",
+            "update_stock": 0,
+            "items": [{"item_code": "ITEM-C", "warehouse": "WH-A"}],
+        }
+        module.queue_important_item_low_stock_alert(doc)
+
+        self.assertEqual(queued, [])
+
+    def test_purchase_invoice_with_update_stock_is_queued(self):
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-PI-UPDATE-STOCK", actual_qty=5)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        queued = []
+        fake_frappe.db.after_commit = types.SimpleNamespace(
+            add=lambda callback: queued.append(callback)
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        doc = {
+            "doctype": "Purchase Invoice",
+            "update_stock": 1,
+            "items": [{"item_code": "ITEM-D", "warehouse": "WH-A"}],
+        }
+        module.queue_important_item_low_stock_alert(doc)
+
+        self.assertEqual(len(queued), 1)
+
+    def test_stock_reconciliation_rows_are_queued(self):
+        notification = _FakeNotification()
+        bin_doc = _FakeBin("BIN-SR", actual_qty=5)
+        fake_frappe = _FakeFrappe(
+            bin_doc, notification, bin_name=bin_doc.name, item_important_value=1
+        )
+        queued = []
+        fake_frappe.db.after_commit = types.SimpleNamespace(
+            add=lambda callback: queued.append(callback)
+        )
+        module = _load_module_against_fake_frappe(fake_frappe)
+
+        doc = {
+            "doctype": "Stock Reconciliation",
+            "items": [{"item_code": "ITEM-E", "warehouse": "WH-A"}],
+        }
+        module.queue_important_item_low_stock_alert(doc)
+
+        self.assertEqual(len(queued), 1)
 
 
 class TestSendImportantItemLowStockAlertFunctionBehaviour(unittest.TestCase):

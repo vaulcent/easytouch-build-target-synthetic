@@ -105,12 +105,22 @@ fixtures = [
 # stock transaction and never go through on_submit document-event
 # dispatch themselves, so a "Stock Ledger Entry" -- "on_submit" hook is
 # never actually called on a real site. The "Important Item Low Stock
-# Alert" Notification is instead wired to "on_submit" of the real,
-# originating submittable stock transactions -- Stock Entry, Delivery
-# Note, Purchase Receipt, and Sales Invoice -- which are genuine Frappe
-# document-lifecycle events that do fire. See
+# Alert" Notification is instead wired to BOTH "on_submit" AND
+# "on_cancel" of every real, originating submittable transaction whose
+# lifecycle changes Bin quantities -- Stock Entry, Delivery Note,
+# Purchase Receipt, Purchase Invoice, Stock Reconciliation, and Sales
+# Invoice -- which are genuine Frappe document-lifecycle events that do
+# fire. Both directions are registered because either a submit or a
+# cancel can cross the low-stock threshold (a cancelled Delivery Note
+# gives stock back; a cancelled Purchase Receipt takes it away again).
+# Sales Invoice and Purchase Invoice only ever move stock when their own
+# "update_stock" flag is enabled, so the hooked function itself (not this
+# wiring) skips queuing a check for those two doctypes whenever
+# update_stock is not set, so a plain (non-stock-updating) invoice can
+# never generate a false alert. See
 # synthetic_build_target_app.synthetic_build_target_app.stock_ledger_alerts
-# for the after-commit Bin read and the important-item + low-stock gating.
+# for the after-commit Bin read, the update_stock gating, and the
+# important-item + low-stock gating.
 #
 # Sales Invoice's real "on_submit" event also fires
 # sales_invoice_project.create_project_for_submitted_sales_invoice, which
@@ -142,9 +152,27 @@ doc_events = {
             "synthetic_build_target_app.synthetic_build_target_app."
             "sales_invoice_project.create_project_for_submitted_sales_invoice",
         ],
+        "on_cancel": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
+    },
+    "Purchase Invoice": {
+        "on_submit": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
+        "on_cancel": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
     },
     "Stock Entry": {
         "on_submit": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
+        "on_cancel": (
             "synthetic_build_target_app.synthetic_build_target_app."
             "stock_ledger_alerts.queue_important_item_low_stock_alert"
         ),
@@ -154,9 +182,27 @@ doc_events = {
             "synthetic_build_target_app.synthetic_build_target_app."
             "stock_ledger_alerts.queue_important_item_low_stock_alert"
         ),
+        "on_cancel": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
     },
     "Purchase Receipt": {
         "on_submit": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
+        "on_cancel": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
+    },
+    "Stock Reconciliation": {
+        "on_submit": (
+            "synthetic_build_target_app.synthetic_build_target_app."
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
+        "on_cancel": (
             "synthetic_build_target_app.synthetic_build_target_app."
             "stock_ledger_alerts.queue_important_item_low_stock_alert"
         ),

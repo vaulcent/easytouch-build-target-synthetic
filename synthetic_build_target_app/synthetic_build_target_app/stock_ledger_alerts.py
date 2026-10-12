@@ -8,26 +8,44 @@ written via a direct ``db_insert`` as part of posting a stock transaction
 never fires on a real site; it is an ineffective hook and has been
 removed.
 
-This module instead hooks ``on_submit`` of the real, originating
-submittable stock transactions that a user actually submits -- ``Stock
-Entry``, ``Delivery Note``, ``Purchase Receipt``, and ``Sales Invoice``
-(the latter only actually moves stock when ``update_stock`` is set, which
-this module does not need to special-case: if there is no stock movement
-there is simply no low/important item to react to). Those ``on_submit``
-hooks are real Frappe document-lifecycle events that do fire.
+This module instead hooks ``on_submit`` AND ``on_cancel`` of every real,
+originating submittable transaction whose lifecycle changes ``Bin``
+quantities -- ``Stock Entry``, ``Delivery Note``, ``Purchase Receipt``,
+``Purchase Invoice``, ``Stock Reconciliation``, and ``Sales Invoice``.
+Both directions are registered because either a submit or a cancel can
+cross the low-stock threshold in either direction: cancelling a Delivery
+Note gives stock back (crossing upward), cancelling a Purchase Receipt
+takes stock away again (crossing downward). Those ``on_submit`` /
+``on_cancel`` hooks are real Frappe document-lifecycle events that do
+fire; ``Stock Ledger Entry`` and ``Bin`` writes do not reliably emit
+ordinary document lifecycle events of their own.
+
+Sales Invoice and Purchase Invoice only actually move stock when their
+``update_stock`` flag is enabled; without it they never touch a Bin at
+all, so this module queues a check for those two doctypes only when
+``update_stock`` is truthy on the submitted/cancelled document. Queuing
+unconditionally for an invoice with ``update_stock`` unset would still
+collect the (item_code, warehouse) pairs off its rows (the ``warehouse``
+field exists on those child rows regardless of ``update_stock``) and could
+then re-send a stale alert for an unrelated, already-low Bin that this
+particular invoice never actually changed -- a false alert this module
+must not produce.
 
 ERPNext still updates ``Bin`` quantities (``actual_qty``) via direct
 database writes rather than ``Bin.save()``, so the final authoritative
 quantity is only guaranteed to be correct once the enclosing database
-transaction has committed. This module therefore schedules an
-after-commit callback per item/warehouse pair found on the submitted
-transaction's child rows, and only reads the Bin and performs the
-important-item + low-stock gating once that commit has actually happened.
+transaction has committed -- this is true for cancellation reversals just
+as much as for the original submit. This module therefore schedules an
+after-commit callback per item/warehouse pair found on the submitted or
+cancelled transaction's child rows, and only reads the Bin and performs
+the important-item + low-stock gating once that commit has actually
+happened.
 
 The warehouse context is read generically from whichever real child-row
 field the given transaction type uses (``warehouse`` for Delivery Note /
-Purchase Receipt / Sales Invoice rows, ``s_warehouse`` / ``t_warehouse``
-for Stock Entry rows), never hardcoded to one item or warehouse.
+Purchase Receipt / Sales Invoice / Purchase Invoice / Stock Reconciliation
+rows, ``s_warehouse`` / ``t_warehouse`` for Stock Entry rows), never
+hardcoded to one item or warehouse.
 
 Real ERPNext v16 validation also rejects two things a naive fix might
 try:
@@ -76,13 +94,21 @@ LOW_STOCK_THRESHOLD = 10
 #: type, item, or warehouse.
 _WAREHOUSE_FIELDS = ("warehouse", "s_warehouse", "t_warehouse")
 
+#: Doctypes whose stock impact is conditional on their own ``update_stock``
+#: flag. Sales Invoice and Purchase Invoice never move stock unless this
+#: flag is enabled, so a check must only be queued for them when it is.
+_INVOICE_DOCTYPES_REQUIRING_UPDATE_STOCK = frozenset(
+    {"Sales Invoice", "Purchase Invoice"}
+)
+
 
 def _iter_item_warehouse_pairs(doc):
     """Yield every real ``(item_code, warehouse)`` pair on ``doc``'s rows.
 
-    ``doc`` is the real submitted stock transaction (Stock Entry, Delivery
-    Note, Purchase Receipt, or Sales Invoice). Reads only its ``items``
-    child rows and only the real warehouse fields those rows define.
+    ``doc`` is the real submitted/cancelled stock transaction (Stock
+    Entry, Delivery Note, Purchase Receipt, Purchase Invoice, Stock
+    Reconciliation, or Sales Invoice). Reads only its ``items`` child rows
+    and only the real warehouse fields those rows define.
     """
     for row in doc.get("items") or []:
         item_code = row.get("item_code")
@@ -97,12 +123,27 @@ def _iter_item_warehouse_pairs(doc):
 def queue_important_item_low_stock_alert(doc, method=None) -> None:
     """Schedule a low-stock check for every item/warehouse on ``doc``.
 
-    Wired to ``on_submit`` of the real originating stock transactions
-    (Stock Entry, Delivery Note, Purchase Receipt, Sales Invoice) via
+    Wired to ``on_submit`` AND ``on_cancel`` of every real originating
+    stock-changing transaction (Stock Entry, Delivery Note, Purchase
+    Receipt, Purchase Invoice, Stock Reconciliation, Sales Invoice) via
     hooks.py, so this runs for every real stock movement a user actually
-    submits. ``doc`` here is that submitted transaction; its item/
+    submits or cancels -- either direction can cross the low-stock
+    threshold.
+
+    Sales Invoice and Purchase Invoice only move stock when their
+    ``update_stock`` flag is enabled; this function queues nothing for
+    them when it is not, since those invoices never touch a Bin and
+    queuing anyway risks re-sending a stale alert for an unrelated,
+    already-low Bin that this particular document never changed.
+
+    ``doc`` here is the real submitted/cancelled transaction; its item/
     warehouse pairs are read generically off its rows, never hardcoded.
     """
+    if doc.get("doctype") in _INVOICE_DOCTYPES_REQUIRING_UPDATE_STOCK and not doc.get(
+        "update_stock"
+    ):
+        return
+
     for item_code, warehouse in _iter_item_warehouse_pairs(doc):
         frappe.db.after_commit.add(
             lambda ic=item_code, wh=warehouse: send_important_item_low_stock_alert(
@@ -115,10 +156,12 @@ def send_important_item_low_stock_alert(item_code: str, warehouse: str) -> None:
     """Read the final Bin quantity for ``item_code``/``warehouse`` and send
     the existing "Important Item Low Stock Alert" Notification if due.
 
-    Runs after the enclosing stock transaction has committed, so the Bin
-    quantity read here is the final, authoritative post-movement value --
-    independent of whether ERPNext updated the Bin via ``save()`` or a
-    direct database write for this particular transaction type.
+    Runs after the enclosing stock transaction (submit or cancel) has
+    committed, so the Bin quantity read here is the final, authoritative
+    post-movement value -- independent of whether ERPNext updated the Bin
+    via ``save()`` or a direct database write for this particular
+    transaction type, and independent of whether the movement was a
+    forward submission or a cancellation reversal.
 
     The gating decision is made entirely in ordinary trusted Python: BOTH
     ``Item.is_important_item`` must be true AND the final
