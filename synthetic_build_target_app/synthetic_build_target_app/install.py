@@ -96,24 +96,20 @@ DISCOUNT_APPROVAL_PERMISSION_GRANTS = {
 }
 
 
-def ensure_discount_approval_workflow_permissions() -> None:
-    """Idempotently grant the "Sales Invoice Discount Approval" Workflow's
-    two roles (Sales User, Sales Manager) the exact Sales Invoice
-    read/write/create/submit permissions their transitions require (see
-    ``DISCOUNT_APPROVAL_PERMISSION_GRANTS`` above for the matrix this is
-    derived from).
+def _ensure_custom_doc_perms(doctype: str, grants: dict) -> None:
+    """Idempotently grant each ``role -> {permission: 1}`` mapping in
+    ``grants`` to ``doctype`` via Custom DocPerm.
 
     Calls ``frappe.permissions.setup_custom_perms`` first so the standard
     DocPerm table is copied into Custom DocPerm (preserving every
     existing row) before this updates/inserts only the exact role rows
-    the workflow needs -- the whole permission table is never replaced.
-    Safe to run on every migrate: once a role already has every required
-    bit set, this is a no-op for that role.
+    required -- the whole permission table is never replaced. Safe to run
+    on every migrate: once a role already has every required bit set,
+    this is a no-op for that role.
     """
-    doctype = DISCOUNT_APPROVAL_WORKFLOW_DOCTYPE
     frappe.permissions.setup_custom_perms(doctype)
 
-    for role, required in DISCOUNT_APPROVAL_PERMISSION_GRANTS.items():
+    for role, required in grants.items():
         existing = frappe.get_all(
             "Custom DocPerm",
             filters={"parent": doctype, "role": role, "permlevel": 0},
@@ -144,3 +140,64 @@ def ensure_discount_approval_workflow_permissions() -> None:
             doc.insert(ignore_permissions=True)
 
     frappe.clear_cache(doctype=doctype)
+
+
+def ensure_discount_approval_workflow_permissions() -> None:
+    """Idempotently grant the "Sales Invoice Discount Approval" Workflow's
+    two roles (Sales User, Sales Manager) the exact Sales Invoice
+    read/write/create/submit permissions their transitions require (see
+    ``DISCOUNT_APPROVAL_PERMISSION_GRANTS`` above for the matrix this is
+    derived from).
+    """
+    _ensure_custom_doc_perms(
+        DISCOUNT_APPROVAL_WORKFLOW_DOCTYPE, DISCOUNT_APPROVAL_PERMISSION_GRANTS
+    )
+
+
+#: DocType the "Sales Order Finance Approval" Workflow (see
+#: fixtures/workflow.json) governs.
+SALES_ORDER_FINANCE_APPROVAL_WORKFLOW_DOCTYPE = "Sales Order"
+
+#: Exact Sales Order permissions each workflow role needs to actually
+#: execute its transitions, derived from this workflow's state/transition
+#: matrix:
+#:
+#:   state                       doc_status  allow_edit
+#:   Draft                       0           Sales User
+#:   Pending Finance Approval    0           Finance Approval
+#:   Approved                    1           Finance Approval
+#:
+#:   transition                                            allowed role     condition               underlying live permission
+#:   Draft -> Approved          (action "Submit")           Sales User       grand_total <= 5000     SUBMIT (next doc_status=1)
+#:   Draft -> Pending Fin.Appr. (action "Send for Finance Approval") Sales User grand_total > 5000   WRITE (next doc_status=0, ordinary save)
+#:   Pending Fin.Appr -> Approved (action "Approve")        Finance Approval grand_total > 5000      SUBMIT (next doc_status=1)
+#:
+#: - "Sales User" must read/write/create a Draft Sales Order, and needs
+#:   live *submit* permission to execute the Draft -> Approved transition
+#:   itself when grand_total <= 5000.
+#: - "Finance Approval" must read/write the Pending Finance Approval
+#:   state (allow_edit), and needs live *submit* permission to execute
+#:   the Pending Finance Approval -> Approved transition when
+#:   grand_total > 5000. It never creates the order itself, so create is
+#:   not granted.
+#: Neither role needs cancel/amend for this workflow: every transition's
+#: next state is either doc_status=0 (an ordinary save) or doc_status=1
+#: via submit, so only read/write/(create)/submit are granted -- never a
+#: speculative cancel/amend grant.
+SALES_ORDER_FINANCE_APPROVAL_PERMISSION_GRANTS = {
+    "Sales User": {"read": 1, "write": 1, "create": 1, "submit": 1},
+    "Finance Approval": {"read": 1, "write": 1, "submit": 1},
+}
+
+
+def ensure_sales_order_finance_approval_workflow_permissions() -> None:
+    """Idempotently grant the "Sales Order Finance Approval" Workflow's
+    two roles (Sales User, Finance Approval) the exact Sales Order
+    read/write/(create)/submit permissions their transitions require
+    (see ``SALES_ORDER_FINANCE_APPROVAL_PERMISSION_GRANTS`` above for the
+    matrix this is derived from).
+    """
+    _ensure_custom_doc_perms(
+        SALES_ORDER_FINANCE_APPROVAL_WORKFLOW_DOCTYPE,
+        SALES_ORDER_FINANCE_APPROVAL_PERMISSION_GRANTS,
+    )
