@@ -50,5 +50,57 @@
         "condition": "doc.additional_discount_percentage > 10"
       }
     ]
+  },
+  {
+    "doctype": "Workflow",
+    "name": "Sales Order Finance Approval",
+    "workflow_name": "Sales Order Finance Approval",
+    "document_type": "Sales Order",
+    "is_active": 1,
+    "workflow_state_field": "workflow_state",
+    "send_email_alert": 0,
+    "states": [
+      {
+        "state": "Draft",
+        "doc_status": "0",
+        "allow_edit": "Sales User"
+      },
+      {
+        "state": "Pending Finance Approval",
+        "doc_status": "0",
+        "allow_edit": "Finance Approval"
+      },
+      {
+        "state": "Approved",
+        "doc_status": "1",
+        "allow_edit": "Finance Approval"
+      }
+    ],
+    "transitions": [
+      {
+        "state": "Draft",
+        "action": "Submit",
+        "next_state": "Approved",
+        "allowed": "Sales User",
+        "allow_self_approval": 1,
+        "condition": "doc.grand_total <= 5000"
+      },
+      {
+        "state": "Draft",
+        "action": "Send for Finance Approval",
+        "next_state": "Pending Finance Approval",
+        "allowed": "Sales User",
+        "allow_self_approval": 1,
+        "condition": "doc.grand_total > 5000"
+      },
+      {
+        "state": "Pending Finance Approval",
+        "action": "Approve",
+        "next_state": "Approved",
+        "allowed": "Finance Approval",
+        "allow_self_approval": 1,
+        "condition": "doc.grand_total > 5000"
+      }
+    ]
   }
 ]

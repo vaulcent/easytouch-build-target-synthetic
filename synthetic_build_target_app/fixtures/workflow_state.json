@@ -13,5 +13,10 @@
     "doctype": "Workflow State",
     "name": "Approved",
     "workflow_state_name": "Approved"
+  },
+  {
+    "doctype": "Workflow State",
+    "name": "Pending Finance Approval",
+    "workflow_state_name": "Pending Finance Approval"
   }
 ]
