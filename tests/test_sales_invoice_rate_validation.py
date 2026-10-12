@@ -1,5 +1,4 @@
 import ast
-import importlib.util
 import json
 import os
 import types
@@ -21,6 +20,14 @@ EXPECTED_DOTTED_PATH = (
     "sales_invoice_validations.validate_selling_rate_against_valuation_rate"
 )
 AUTHORIZED_OVERRIDE_ROLE = "Sales Invoice Rate Override"
+
+# Authoritative, Frappe-backed ERPNext v16 behavior evidence for this
+# requirement (both the "validate" and "before_submit" lanes, plus the
+# override-role bypass) lives in the dedicated
+# tests/test_sales_invoice_rate_validation_behavior.py module, not here.
+# This module only contains static, sandbox-safe checks on the smallest
+# complete wiring change (hooks.py doc_events + the validation module +
+# the idempotent Role fixture).
 
 
 def _load_hooks_module():
@@ -167,36 +174,6 @@ class TestSalesInvoiceRateOverrideRoleFixture(unittest.TestCase):
         entry = self._role_entries()[0]
         self.assertEqual(entry["role_name"], AUTHORIZED_OVERRIDE_ROLE)
         self.assertEqual(entry["name"], AUTHORIZED_OVERRIDE_ROLE)
-
-
-class TestSalesInvoiceRateValidationFrappeBacked(unittest.TestCase):
-    """Behavioral evidence requires a real Frappe/ERPNext v16 site.
-
-    Frappe is intentionally unavailable in this local sandbox, so this case
-    skips here. The authoritative post-finish run on a disposable ERPNext
-    v16 site must exercise this with real Frappe/ERPNext (no SQLite or
-    mocked Frappe), confirming that:
-      - a non-override user cannot submit a Sales Invoice whose item rate
-        is below its valuation rate -- including when the row's own
-        valuation_rate is left empty and must be read from the real
-        warehouse Bin instead -- (before_submit lane blocks it), and
-      - a user holding the "Sales Invoice Rate Override" role (assignable
-        because the role fixture provisions it) can submit it.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        if importlib.util.find_spec("frappe") is None:
-            raise unittest.SkipTest(
-                "Frappe is not installed in this local sandbox; behavioral "
-                "evidence must come from a real ERPNext v16 site run."
-            )
-
-    def test_placeholder_requires_real_frappe_site(self):
-        self.skipTest(
-            "Run against a disposable ERPNext v16 site for authoritative "
-            "evidence; not executed in this local sandbox."
-        )
 
 
 if __name__ == "__main__":
