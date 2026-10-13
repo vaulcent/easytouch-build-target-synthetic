@@ -5,9 +5,4 @@ app_description = "Fabricated disposable Frappe app used only as a D1 GitHub int
 app_email = "fixture@example.test"
 app_license = "MIT"
 
-after_migrate = (
-    "synthetic_build_target_app.synthetic_build_target_app.install."
-    "ensure_important_item_notification"
-)
-
-fixtures = ["Custom Field"]
+fixtures = ["Custom Field", "Notification"]
