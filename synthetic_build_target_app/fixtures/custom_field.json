@@ -67,5 +67,15 @@
     "options": "Normal\nVIP\nHigh Risk",
     "insert_after": "customer_type",
     "description": "Lets the team classify the customer as Normal, VIP, or High Risk directly on the customer page."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Item-important_item",
+    "dt": "Item",
+    "fieldname": "important_item",
+    "fieldtype": "Check",
+    "label": "Important Item",
+    "insert_after": "is_stock_item",
+    "description": "Mark this item as important. When its stock quantity in any warehouse drops below the low-stock alert threshold, the Purchase Manager is automatically notified."
   }
 ]
