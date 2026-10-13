@@ -69,16 +69,5 @@
     "insert_after": "item_group",
     "default": "0",
     "description": "Marks this item as important so the Low Stock Alert for Important Items notification applies when its stock quantity drops below 10."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Project-sales_invoice",
-    "dt": "Project",
-    "fieldname": "sales_invoice",
-    "fieldtype": "Link",
-    "options": "Sales Invoice",
-    "label": "Sales Invoice",
-    "insert_after": "project_name",
-    "description": "Automatically set to the submitted Sales Invoice this Project was created for. Used to idempotently link the auto-created Project back to its originating invoice and to prevent duplicate Projects for the same invoice."
   }
 ]

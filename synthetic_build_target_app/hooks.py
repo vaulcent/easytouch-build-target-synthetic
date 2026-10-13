@@ -44,21 +44,6 @@ fixtures = [
 # document-lifecycle events that do fire. See
 # synthetic_build_target_app.synthetic_build_target_app.stock_ledger_alerts
 # for the after-commit Bin read and the important-item + low-stock gating.
-#
-# Sales Invoice's real "on_submit" event also fires
-# sales_invoice_project.create_project_for_submitted_sales_invoice, which
-# automatically creates a Project named from the customer name and
-# invoice number for every submitted Sales Invoice, idempotently linked
-# back to that invoice via the "sales_invoice" Custom Field on Project
-# (see fixtures/custom_field.json and
-# synthetic_build_target_app.synthetic_build_target_app.sales_invoice_project).
-# Both handlers are real Frappe on_submit hooks for the same DocType and
-# event, wired as a *list* (not a tuple) so Frappe's hook-merging utility
-# flattens/extends the two dotted method paths into separate entries
-# (frappe.get_hooks only extends plain Python lists; a tuple is instead
-# appended as a single nested object, which breaks the hook dispatcher's
-# ``method_string.split(".")`` call at submit time) -- both handlers run
-# on every real submission.
 doc_events = {
     "Sales Invoice": {
         "validate": (
@@ -69,12 +54,10 @@ doc_events = {
             "synthetic_build_target_app.synthetic_build_target_app."
             "sales_invoice_validations.validate_selling_rate_against_valuation_rate"
         ),
-        "on_submit": [
+        "on_submit": (
             "synthetic_build_target_app.synthetic_build_target_app."
-            "stock_ledger_alerts.queue_important_item_low_stock_alert",
-            "synthetic_build_target_app.synthetic_build_target_app."
-            "sales_invoice_project.create_project_for_submitted_sales_invoice",
-        ],
+            "stock_ledger_alerts.queue_important_item_low_stock_alert"
+        ),
     },
     "Stock Entry": {
         "on_submit": (

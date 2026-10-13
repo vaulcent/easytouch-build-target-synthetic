@@ -72,15 +72,7 @@ class TestStockTransactionLowStockAlertHookWiring(unittest.TestCase):
             self.assertIn(doctype, self.hooks.doc_events)
             events = self.hooks.doc_events[doctype]
             self.assertIn("on_submit", events)
-            on_submit = events["on_submit"]
-            if isinstance(on_submit, (list, tuple)):
-                # Sales Invoice's real on_submit event also fires the
-                # separate "create a Project for this invoice" hook (see
-                # sales_invoice_project.py); this low-stock-alert hook
-                # must still be one of the real handlers wired to it.
-                self.assertIn(EXPECTED_DOTTED_PATH, on_submit)
-            else:
-                self.assertEqual(on_submit, EXPECTED_DOTTED_PATH)
+            self.assertEqual(events["on_submit"], EXPECTED_DOTTED_PATH)
 
     def test_sales_invoice_validate_and_before_submit_hooks_untouched(self):
         events = self.hooks.doc_events["Sales Invoice"]
