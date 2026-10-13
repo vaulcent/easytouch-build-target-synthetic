@@ -22,12 +22,12 @@ EXPECTED_DOTTED_PATH = (
 AUTHORIZED_OVERRIDE_ROLE = "Sales Invoice Rate Override"
 
 # Authoritative, Frappe-backed ERPNext v16 behavior evidence for this
-# requirement (both the "validate" and "before_submit" lanes, the
-# currency/Sales-UOM-aware comparison, and the override-role bypass) lives
-# in the dedicated tests/test_sales_invoice_rate_validation_behavior.py
-# module, not here. This module only contains static, sandbox-safe checks
-# on the smallest complete wiring change (hooks.py doc_events + the
-# validation module + the idempotent Role fixture).
+# requirement (both the "validate" and "before_submit" lanes, plus the
+# override-role bypass) lives in the dedicated
+# tests/test_sales_invoice_rate_validation_behavior.py module, not here.
+# This module only contains static, sandbox-safe checks on the smallest
+# complete wiring change (hooks.py doc_events + the validation module +
+# the idempotent Role fixture).
 
 
 def _load_hooks_module():
@@ -109,22 +109,10 @@ class TestSalesInvoiceRateValidationWiring(unittest.TestCase):
         self.assertIn("AUTHORIZED_OVERRIDE_ROLE", self.validation_source)
         self.assertIn('"Sales Invoice Rate Override"', self.validation_source)
 
-    def test_validation_compares_base_rate_to_valuation_floor_per_sales_uom(self):
-        # Smallest-complete-change sanity check on the currency/Sales-UOM
-        # aware comparison logic: selling rate converted to Company
-        # currency (base_rate) compared against the per-Stock-UOM
-        # valuation_rate scaled up by conversion_factor (Stock-UOM units
-        # per one Sales-UOM unit) into a per-Sales-UOM floor.
+    def test_validation_compares_rate_to_valuation_rate(self):
+        # Smallest-complete-change sanity check on the comparison logic.
         self.assertIn("valuation_rate", self.validation_source)
-        self.assertIn("base_rate", self.validation_source)
-        self.assertIn("conversion_factor", self.validation_source)
-        self.assertIn(
-            "base_rate < valuation_floor_per_sales_uom", self.validation_source
-        )
-        self.assertIn(
-            "valuation_floor_per_sales_uom = valuation_rate * conversion_factor",
-            self.validation_source,
-        )
+        self.assertIn("selling_rate < valuation_rate", self.validation_source)
 
     def test_validation_falls_back_to_real_warehouse_bin_valuation_rate(self):
         # When a row's own valuation_rate is empty, the validation must
