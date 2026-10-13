@@ -46,7 +46,7 @@
         "action": "Approve",
         "next_state": "Approved",
         "allowed": "Sales Manager",
-        "allow_self_approval": 1,
+        "allow_self_approval": 0,
         "condition": "doc.additional_discount_percentage > 10"
       }
     ]
@@ -83,7 +83,7 @@
         "next_state": "Approved",
         "allowed": "Sales User",
         "allow_self_approval": 1,
-        "condition": "doc.grand_total <= 5000"
+        "condition": "doc.base_grand_total <= 5000"
       },
       {
         "state": "Draft",
@@ -91,7 +91,7 @@
         "next_state": "Pending Finance Approval",
         "allowed": "Sales User",
         "allow_self_approval": 1,
-        "condition": "doc.grand_total > 5000"
+        "condition": "doc.base_grand_total > 5000"
       },
       {
         "state": "Pending Finance Approval",
@@ -99,7 +99,7 @@
         "next_state": "Approved",
         "allowed": "Finance Approval",
         "allow_self_approval": 1,
-        "condition": "doc.grand_total > 5000"
+        "condition": "doc.base_grand_total > 5000"
       }
     ]
   }
