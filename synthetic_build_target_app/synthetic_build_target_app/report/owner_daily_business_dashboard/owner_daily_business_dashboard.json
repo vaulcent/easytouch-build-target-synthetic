@@ -17,7 +17,8 @@
    "label": "Company",
    "fieldtype": "Link",
    "options": "Company",
-   "mandatory": 0
+   "mandatory": 1,
+   "reqd": 1
   },
   {
    "doctype": "Report Filter",
