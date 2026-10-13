@@ -29,16 +29,6 @@
   },
   {
     "doctype": "Custom Field",
-    "name": "Lead-expected_deal_value",
-    "dt": "Lead",
-    "fieldname": "expected_deal_value",
-    "fieldtype": "Currency",
-    "label": "Expected Deal Value",
-    "insert_after": "annual_revenue",
-    "description": "Expected currency value of the deal this Lead is projected to close for."
-  },
-  {
-    "doctype": "Custom Field",
     "name": "Customer-risk_classification",
     "dt": "Customer",
     "fieldname": "risk_classification",
