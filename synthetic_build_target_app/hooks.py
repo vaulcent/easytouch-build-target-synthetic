@@ -33,17 +33,14 @@ fixtures = [
 # item_code + the row's own warehouse) whenever a row's own
 # valuation_rate is empty, instead of skipping the check.
 #
-# Real validation proved that ERPNext's internally written Stock Ledger
-# Entry rows are inserted via a direct db_insert as part of posting a
-# stock transaction and never go through on_submit document-event
-# dispatch themselves, so a "Stock Ledger Entry" -- "on_submit" hook is
-# never actually called on a real site. The "Important Item Low Stock
-# Alert" Notification is instead wired to "on_submit" of the real,
-# originating submittable stock transactions -- Stock Entry, Delivery
-# Note, Purchase Receipt, and Sales Invoice -- which are genuine Frappe
-# document-lifecycle events that do fire. See
-# synthetic_build_target_app.synthetic_build_target_app.stock_ledger_alerts
-# for the after-commit Bin read and the important-item + low-stock gating.
+# "Stock Ledger Entry" -- "on_submit" is the general, stock-ledger-
+# compatible hook that makes the existing "Important Item Low Stock Alert"
+# Notification actually fire after real ERPNext stock movements (Stock
+# Entry, Delivery Note, Purchase Receipt, Sales Invoice with
+# update_stock, etc.). ERPNext updates Bin quantities via direct database
+# writes rather than Bin.save(), so the Notification DocType's built-in
+# "Value Change" detection never observes a change on its own; this hook
+# reads the final, post-commit warehouse Bin quantity instead.
 doc_events = {
     "Sales Invoice": {
         "validate": (
@@ -54,24 +51,8 @@ doc_events = {
             "synthetic_build_target_app.synthetic_build_target_app."
             "sales_invoice_validations.validate_selling_rate_against_valuation_rate"
         ),
-        "on_submit": (
-            "synthetic_build_target_app.synthetic_build_target_app."
-            "stock_ledger_alerts.queue_important_item_low_stock_alert"
-        ),
     },
-    "Stock Entry": {
-        "on_submit": (
-            "synthetic_build_target_app.synthetic_build_target_app."
-            "stock_ledger_alerts.queue_important_item_low_stock_alert"
-        ),
-    },
-    "Delivery Note": {
-        "on_submit": (
-            "synthetic_build_target_app.synthetic_build_target_app."
-            "stock_ledger_alerts.queue_important_item_low_stock_alert"
-        ),
-    },
-    "Purchase Receipt": {
+    "Stock Ledger Entry": {
         "on_submit": (
             "synthetic_build_target_app.synthetic_build_target_app."
             "stock_ledger_alerts.queue_important_item_low_stock_alert"

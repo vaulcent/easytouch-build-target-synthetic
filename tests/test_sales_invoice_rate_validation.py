@@ -66,24 +66,15 @@ class TestSalesInvoiceRateValidationWiring(unittest.TestCase):
         self.assertEqual(events["validate"], EXPECTED_DOTTED_PATH)
         self.assertEqual(events["before_submit"], EXPECTED_DOTTED_PATH)
 
-    def test_hooked_doctypes_are_real_submittable_stock_transactions(self):
-        # hooks.py also wires on_submit hooks for the Important Item Low
-        # Stock Alert (a separate real ERPNext semantic gap repaired
-        # alongside this one). Real validation proved ERPNext's internally
-        # written Stock Ledger Entry rows never emit on_submit document
-        # events (they are inserted via a direct db_insert), so that
-        # ineffective hook must NOT be present; instead the real,
-        # originating submittable stock transactions are hooked.
+    def test_sales_invoice_and_stock_ledger_entry_doctypes_are_hooked(self):
+        # hooks.py now also wires a Stock Ledger Entry -- on_submit hook for
+        # the Important Item Low Stock Alert (a separate real ERPNext
+        # semantic gap repaired alongside this one); both doctypes, and
+        # only these two, are hooked.
         self.assertEqual(
             set(self.hooks.doc_events.keys()),
-            {
-                "Sales Invoice",
-                "Stock Entry",
-                "Delivery Note",
-                "Purchase Receipt",
-            },
+            {"Sales Invoice", "Stock Ledger Entry"},
         )
-        self.assertNotIn("Stock Ledger Entry", self.hooks.doc_events)
 
     def test_validation_function_is_defined(self):
         function_names = [

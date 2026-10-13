@@ -5,7 +5,7 @@
     "subject": "Low Stock Alert: {{ doc.item_code }}",
     "document_type": "Bin",
     "event": "Custom",
-    "channel": "System Notification",
+    "channel": "Email",
     "enabled": 1,
     "is_standard": 0,
     "send_system_notification": 1,

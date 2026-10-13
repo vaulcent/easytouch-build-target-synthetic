@@ -42,15 +42,11 @@ class TestImportantItemLowStockAlertNotification(unittest.TestCase):
             "fixture (idempotent - no duplicates).",
         )
 
-    def test_alert_targets_bin_document_type_via_system_notification_channel(self):
-        # Repaired: the primary channel is now "System Notification" so the
-        # alert creates an in-app Notification Log without requiring any
-        # outgoing Email Account to be configured on the site.
+    def test_alert_targets_bin_document_type(self):
         entry = self._alert_entries()[0]
         self.assertEqual(entry["document_type"], "Bin")
         self.assertEqual(entry.get("enabled"), 1)
-        self.assertEqual(entry.get("channel"), "System Notification")
-        self.assertNotEqual(entry.get("channel"), "Email")
+        self.assertEqual(entry.get("channel"), "Email")
 
     def test_alert_uses_custom_event_not_wired_to_ordinary_bin_saves(self):
         # "Custom" is not auto-triggered by core Bin save/value-change doc
