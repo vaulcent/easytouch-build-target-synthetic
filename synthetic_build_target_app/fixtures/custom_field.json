@@ -36,15 +36,5 @@
     "label": "Release Pipeline Proof",
     "insert_after": "title",
     "description": "Used only to prove the release validation/promotion pipeline end to end."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Lead-potential_value",
-    "dt": "Lead",
-    "fieldname": "potential_value",
-    "fieldtype": "Currency",
-    "label": "Potential Deal Value",
-    "insert_after": "annual_revenue",
-    "description": "Estimated worth of this lead if it converts into a customer."
   }
 ]
