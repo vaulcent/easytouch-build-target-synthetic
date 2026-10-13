@@ -5,15 +5,10 @@ app_description = "Fabricated disposable Frappe app used only as a D1 GitHub int
 app_email = "fixture@example.test"
 app_license = "MIT"
 
-# Run both idempotent post-migrate integrations on every migrate: the
-# Notification fixture backfill, and keeping the real installed
-# "Salesperson Sales Summary" Query Report's database "query" field in
-# sync with the shipped, read-only salesperson_sales_summary.sql file (the
-# on-disk Report JSON fixture deliberately does not embed the SQL itself).
-after_migrate = [
-    "synthetic_build_target_app.synthetic_build_target_app.install.ensure_important_item_notification",
-    "synthetic_build_target_app.synthetic_build_target_app.install.ensure_salesperson_sales_summary_report_query",
-]
+after_migrate = (
+    "synthetic_build_target_app.synthetic_build_target_app.install."
+    "ensure_important_item_notification"
+)
 
 # "Custom Field" fixtures are the app's custom field definitions (see
 # fixtures/custom_field.json). The "Role" fixture provisions the
