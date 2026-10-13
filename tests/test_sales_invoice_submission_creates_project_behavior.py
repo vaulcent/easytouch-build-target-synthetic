@@ -127,27 +127,11 @@ class TestSalesInvoiceSubmissionCreatesProjectBehavior(unittest.TestCase):
 
     @classmethod
     def _ensure_fiscal_year(cls, company):
-        """Ensure a real Fiscal Year covers "today" for ``company``.
-
-        Prefers reusing/extending an already-existing Fiscal Year that
-        genuinely covers "today" (whether global or scoped to this
-        company). Only when none exists does it insert a brand-new one
-        -- and, in that case, it deliberately creates the *smallest
-        possible* single-day range (exactly "today") rather than a full
-        calendar year. A full calendar-year range can collide with an
-        already-existing, non-"today"-covering Fiscal Year left over
-        from another authoritative test module on this shared disposable
-        site (for example a short/custom-dated Fiscal Year whose end
-        date happens to coincide with this calendar year's end date),
-        which real ERPNext rejects as an overlap even though that other
-        Fiscal Year never actually satisfied the "candidates" search
-        below. Because the search below already proved no existing
-        Fiscal Year covers "today", a single-day range anchored on
-        "today" itself cannot overlap any existing Fiscal Year's span
-        either.
-        """
         frappe = cls.frappe
         today = frappe.utils.nowdate()
+        year = frappe.utils.getdate(today).year
+        start = "%d-01-01" % year
+        end = "%d-12-31" % year
 
         candidates = frappe.get_all(
             "Fiscal Year",
@@ -171,9 +155,9 @@ class TestSalesInvoiceSubmissionCreatesProjectBehavior(unittest.TestCase):
         fy = frappe.get_doc(
             {
                 "doctype": "Fiscal Year",
-                "year": "Easytouch SI Project Test FY %s" % today,
-                "year_start_date": today,
-                "year_end_date": today,
+                "year": "Easytouch SI Project Test FY %d" % year,
+                "year_start_date": start,
+                "year_end_date": end,
             }
         )
         fy.append("companies", {"company": company})
