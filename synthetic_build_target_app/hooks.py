@@ -5,18 +5,14 @@ app_description = "Fabricated disposable Frappe app used only as a D1 GitHub int
 app_email = "fixture@example.test"
 app_license = "MIT"
 
-# Run all idempotent post-migrate integrations on every migrate: the
-# Notification fixture backfill, keeping the real installed
+# Run both idempotent post-migrate integrations on every migrate: the
+# Notification fixture backfill, and keeping the real installed
 # "Salesperson Sales Summary" Query Report's database "query" field in
 # sync with the shipped, read-only salesperson_sales_summary.sql file (the
-# on-disk Report JSON fixture deliberately does not embed the SQL itself),
-# and granting the "Sales Invoice Discount Approval" Workflow's two roles
-# (Sales User, Sales Manager) the exact Sales Invoice read/write/create/
-# submit permissions their workflow transitions require.
+# on-disk Report JSON fixture deliberately does not embed the SQL itself).
 after_migrate = [
     "synthetic_build_target_app.synthetic_build_target_app.install.ensure_important_item_notification",
     "synthetic_build_target_app.synthetic_build_target_app.install.ensure_salesperson_sales_summary_report_query",
-    "synthetic_build_target_app.synthetic_build_target_app.install.ensure_discount_approval_workflow_permissions",
 ]
 
 # "Custom Field" fixtures are the app's custom field definitions (see
@@ -24,43 +20,11 @@ after_migrate = [
 # "Sales Invoice Rate Override" role idempotently on every site this app is
 # installed/migrated onto (see fixtures/role.json), so the role is
 # assignable to users on a real site without any manual setup step.
-#
-# "Workflow State", "Workflow Action Master", and "Workflow" fixtures
-# together provision the "Sales Invoice Discount Approval" Workflow: a
-# salesperson (Sales User role) can submit a Sales Invoice themselves only
-# when its additional_discount_percentage is 10% or less; above 10% the
-# only allowed transition sends the invoice to "Pending Manager Approval",
-# which only the Sales Manager role may then approve (submit). This is
-# wired through standard Frappe Workflow states/transitions/conditions
-# rather than a custom permission hook, per the standing requirement that
-# salespeople must not approve big discounts themselves. See
-# fixtures/workflow_state.json, fixtures/workflow_action_master.json, and
-# fixtures/workflow.json for the full state/transition matrix, and
-# synthetic_build_target_app.synthetic_build_target_app.install
-# .ensure_discount_approval_workflow_permissions for the idempotent
-# Custom DocPerm grants that make the transitions' real submit step
-# possible for both roles.
 fixtures = [
     "Custom Field",
     {
         "doctype": "Role",
         "filters": [["name", "=", "Sales Invoice Rate Override"]],
-    },
-    {
-        "doctype": "Workflow State",
-        "filters": [
-            ["name", "in", ["Draft", "Pending Manager Approval", "Approved"]]
-        ],
-    },
-    {
-        "doctype": "Workflow Action Master",
-        "filters": [
-            ["name", "in", ["Submit", "Send for Approval", "Approve"]]
-        ],
-    },
-    {
-        "doctype": "Workflow",
-        "filters": [["name", "=", "Sales Invoice Discount Approval"]],
     },
 ]
 
