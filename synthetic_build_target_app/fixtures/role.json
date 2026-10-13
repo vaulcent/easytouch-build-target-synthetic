@@ -6,13 +6,5 @@
     "desk_access": 1,
     "disabled": 0,
     "is_custom": 1
-  },
-  {
-    "doctype": "Role",
-    "name": "Finance Approval",
-    "role_name": "Finance Approval",
-    "desk_access": 1,
-    "disabled": 0,
-    "is_custom": 1
   }
 ]

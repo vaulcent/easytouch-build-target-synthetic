@@ -13,10 +13,5 @@
     "doctype": "Workflow Action Master",
     "name": "Approve",
     "workflow_action_name": "Approve"
-  },
-  {
-    "doctype": "Workflow Action Master",
-    "name": "Send for Finance Approval",
-    "workflow_action_name": "Send for Finance Approval"
   }
 ]
