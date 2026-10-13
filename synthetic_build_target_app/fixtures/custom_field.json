@@ -56,5 +56,16 @@
     "label": "Expected Deal Value",
     "insert_after": "annual_revenue",
     "description": "Expected value of the deal if this lead converts, shown directly below Annual Revenue."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Customer-risk_classification",
+    "dt": "Customer",
+    "fieldname": "risk_classification",
+    "fieldtype": "Select",
+    "label": "Risk Classification",
+    "options": "Normal\nVIP\nHigh Risk",
+    "insert_after": "customer_type",
+    "description": "Lets the team classify the customer as Normal, VIP, or High Risk directly on the customer page."
   }
 ]
