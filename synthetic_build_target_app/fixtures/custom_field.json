@@ -19,38 +19,6 @@
   },
   {
     "doctype": "Custom Field",
-    "name": "Lead-potential_value",
-    "dt": "Lead",
-    "fieldname": "potential_value",
-    "fieldtype": "Currency",
-    "label": "Potential Value",
-    "insert_after": "annual_revenue",
-    "description": "Estimated worth of this lead if converted to a customer."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Lead-expected_deal_value",
-    "dt": "Lead",
-    "fieldname": "expected_deal_value",
-    "fieldtype": "Currency",
-    "label": "Expected Deal Value",
-    "insert_after": "annual_revenue",
-    "description": "Expected currency value of the deal this Lead is projected to close for."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Customer-risk_classification",
-    "dt": "Customer",
-    "fieldname": "risk_classification",
-    "fieldtype": "Select",
-    "label": "Risk Classification",
-    "options": "Normal\nVIP\nHigh Risk",
-    "default": "Normal",
-    "insert_after": "customer_group",
-    "description": "Team-assigned classification: Normal, VIP, or High Risk."
-  },
-  {
-    "doctype": "Custom Field",
     "name": "Task-priority_tier",
     "dt": "Task",
     "fieldname": "priority_tier",
@@ -68,27 +36,5 @@
     "label": "Release Pipeline Proof",
     "insert_after": "title",
     "description": "Used only to prove the release validation/promotion pipeline end to end."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Item-is_important_item",
-    "dt": "Item",
-    "fieldname": "is_important_item",
-    "fieldtype": "Check",
-    "label": "Is Important Item",
-    "insert_after": "item_group",
-    "default": "0",
-    "description": "Marks this item as important so the Low Stock Alert for Important Items notification applies when its stock quantity drops below 10."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Project-sales_invoice",
-    "dt": "Project",
-    "fieldname": "sales_invoice",
-    "fieldtype": "Link",
-    "options": "Sales Invoice",
-    "label": "Sales Invoice",
-    "insert_after": "project_name",
-    "description": "Automatically set to the submitted Sales Invoice this Project was created for. Used to idempotently link the auto-created Project back to its originating invoice and to prevent duplicate Projects for the same invoice."
   }
 ]
