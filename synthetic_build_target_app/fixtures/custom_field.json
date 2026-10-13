@@ -46,5 +46,15 @@
     "label": "Potential Value",
     "insert_after": "annual_revenue",
     "description": "Estimated value this lead could be worth if converted to a customer."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Lead-expected_deal_value",
+    "dt": "Lead",
+    "fieldname": "expected_deal_value",
+    "fieldtype": "Currency",
+    "label": "Expected Deal Value",
+    "insert_after": "annual_revenue",
+    "description": "Expected value of the deal if this lead converts, shown directly below Annual Revenue."
   }
 ]
