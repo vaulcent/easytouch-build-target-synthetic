@@ -6,14 +6,5 @@
     "fieldname": "synthetic_reference",
     "fieldtype": "Data",
     "label": "Synthetic Reference"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Lead-custom_expected_deal_value",
-    "dt": "Lead",
-    "fieldname": "custom_expected_deal_value",
-    "fieldtype": "Currency",
-    "label": "Expected Deal Value",
-    "insert_after": "annual_revenue"
   }
 ]
