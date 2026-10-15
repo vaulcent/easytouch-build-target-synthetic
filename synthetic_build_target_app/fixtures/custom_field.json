@@ -26,5 +26,18 @@
     "fieldtype": "Currency",
     "label": "Expected Deal Value",
     "insert_after": "potential_value"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Customer-risk_category",
+    "dt": "Customer",
+    "fieldname": "risk_category",
+    "fieldtype": "Select",
+    "label": "Risk Category",
+    "options": "Normal\nVIP\nHigh Risk",
+    "default": "Normal",
+    "insert_after": "customer_type",
+    "in_standard_filter": 1,
+    "in_list_view": 1
   }
 ]

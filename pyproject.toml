@@ -30,4 +30,7 @@ packages = [
 include-package-data = true
 
 [tool.setuptools.package-data]
-synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
+synthetic_build_target_app = [
+    "modules.txt",
+    "fixtures/*.json",
+]
