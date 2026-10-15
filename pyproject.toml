@@ -2,3 +2,38 @@
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+# This Frappe app declares one module in modules.txt ("Synthetic Build Target
+# App", scrubbed to "synthetic_build_target_app"). Per Frappe app convention,
+# every module listed in modules.txt must have a corresponding Python
+# subpackage *inside* the app package, i.e.
+# synthetic_build_target_app/synthetic_build_target_app/__init__.py, which
+# this repo already ships on disk.
+#
+# Previously `packages` only listed the flat top-level package
+# ("synthetic_build_target_app"), so a wheel/sdist build silently dropped the
+# nested module subpackage. After install, Frappe's `bench install-app`
+# tried to import "synthetic_build_target_app.synthetic_build_target_app"
+# (to resolve the declared module) and failed with
+# ModuleNotFoundError, because that subpackage was never packaged. Listing
+# both packages explicitly fixes installation.
+#
+# The fixtures directory (synthetic_build_target_app/fixtures/custom_field.json)
+# is plain data, not Python source. Without an explicit package-data
+# declaration, a wheel/sdist build of this app silently drops it, so
+# `bench migrate` on the installed package never sees the Custom Field
+# fixture and the Lead "Expected Deal Value" field is never created.
+# Declaring the package and its data files explicitly here fixes that.
+[tool.setuptools]
+packages = [
+    "synthetic_build_target_app",
+    "synthetic_build_target_app.synthetic_build_target_app",
+]
+include-package-data = true
+
+[tool.setuptools.package-data]
+synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
