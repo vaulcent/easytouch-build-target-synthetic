@@ -1,81 +1,9 @@
 [
   {
     "doctype": "Custom Field",
-    "name": "Issue-synthetic_reference",
     "dt": "Issue",
     "fieldname": "synthetic_reference",
     "fieldtype": "Data",
     "label": "Synthetic Reference"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Lead-referral_source",
-    "dt": "Lead",
-    "fieldname": "referral_source",
-    "fieldtype": "Select",
-    "label": "Referral Source",
-    "options": "Website\nReferral\nCold Call",
-    "insert_after": "source"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Task-priority_tier",
-    "dt": "Task",
-    "fieldname": "priority_tier",
-    "fieldtype": "Select",
-    "label": "Priority Tier",
-    "options": "Low\nMedium\nHigh",
-    "insert_after": "priority"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Opportunity-release_pipeline_proof",
-    "dt": "Opportunity",
-    "fieldname": "release_pipeline_proof",
-    "fieldtype": "Small Text",
-    "label": "Release Pipeline Proof",
-    "insert_after": "title",
-    "description": "Used only to prove the release validation/promotion pipeline end to end."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Lead-potential_value",
-    "dt": "Lead",
-    "fieldname": "potential_value",
-    "fieldtype": "Currency",
-    "label": "Potential Value",
-    "insert_after": "annual_revenue",
-    "description": "Estimated value this lead could be worth if converted to a customer."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Lead-expected_deal_value",
-    "dt": "Lead",
-    "fieldname": "expected_deal_value",
-    "fieldtype": "Currency",
-    "label": "Expected Deal Value",
-    "insert_after": "annual_revenue",
-    "description": "Expected value of the deal if this lead converts, shown directly below Annual Revenue."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Customer-risk_classification",
-    "dt": "Customer",
-    "fieldname": "risk_classification",
-    "fieldtype": "Select",
-    "label": "Risk Classification",
-    "options": "Normal\nVIP\nHigh Risk",
-    "insert_after": "customer_type",
-    "description": "Lets the team classify the customer as Normal, VIP, or High Risk directly on the customer page."
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Item-important_item",
-    "dt": "Item",
-    "fieldname": "important_item",
-    "fieldtype": "Check",
-    "label": "Important Item",
-    "insert_after": "is_stock_item",
-    "description": "Mark this item as important. When its stock quantity in any warehouse drops below the low-stock alert threshold, the Purchase Manager is automatically notified."
   }
 ]
