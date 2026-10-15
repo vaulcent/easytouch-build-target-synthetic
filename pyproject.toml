@@ -1,4 +1,33 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
+
+# Frappe app layout: the outer "synthetic_build_target_app" directory is the
+# app's repo/package root (apps/<app>/<app>/ in a real bench) and it
+# contains hooks.py, modules.txt, fixtures/, plus a nested
+# "synthetic_build_target_app" package of the same name.
+#
+# That inner package is NOT a stray duplicate to exclude: modules.txt lists
+# the module "Synthetic Build Target App", and Frappe's module loader
+# resolves that (scrubbed to "synthetic_build_target_app") by importing
+# "synthetic_build_target_app.synthetic_build_target_app" directly during
+# `bench install-app` / migrate. setuptools will not infer that nested
+# package on its own, so both packages must be declared explicitly here --
+# omitting the inner one is exactly what previously made app installation on
+# a disposable ERPNext v16 site fail with:
+#   ModuleNotFoundError: No module named
+#   'synthetic_build_target_app.synthetic_build_target_app'
+[tool.setuptools]
+packages = [
+    "synthetic_build_target_app",
+    "synthetic_build_target_app.synthetic_build_target_app",
+]
+include-package-data = true
+
+[tool.setuptools.package-data]
+synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
