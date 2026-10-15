@@ -1,33 +1,4 @@
-[build-system]
-requires = ["setuptools>=64"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
-
-# synthetic_build_target_app is a Frappe app. Besides its Python modules
-# (hooks.py, __init__.py, the nested module package, etc.) it ships
-# non-code assets -- most importantly synthetic_build_target_app/fixtures/
-# custom_field.json, which `bench migrate` imports as the "Custom Field"
-# fixture (fixtures = ["Custom Field"] in hooks.py) to create the Lead
-# "Expected Deal Value" field.
-#
-# Without explicit package-data configuration, setuptools only packages
-# *.py files it discovers as part of a package, so a wheel/sdist build
-# silently drops fixtures/custom_field.json and modules.txt. That produced
-# an installed site-packages tree missing fixtures/, which made
-# `bench migrate` unable to import the Custom Field fixture at all
-# (FIXTURE_VERIFY_FAILED). The settings below make sure every non-.py file
-# that already lives inside the synthetic_build_target_app package
-# directory is included in both sdist and wheel builds.
-[tool.setuptools]
-include-package-data = true
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["synthetic_build_target_app*"]
-
-[tool.setuptools.package-data]
-synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
