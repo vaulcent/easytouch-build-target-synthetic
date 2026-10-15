@@ -1,4 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
+
+# Frappe apps ship non-Python data (fixtures/*.json, modules.txt, etc.) inside
+# the importable app package directory (synthetic_build_target_app/). Without
+# explicit package-data configuration, setuptools only packages .py files, so
+# fixtures/custom_field.json (and modules.txt) were silently dropped from the
+# installed wheel even though hooks.py (a .py module) was included. That is
+# why `bench migrate` on the built target never saw the Lead custom field
+# fixture to import. Declaring the data files below (and enabling
+# include-package-data) ensures they are packaged for both sdist and wheel
+# builds.
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
