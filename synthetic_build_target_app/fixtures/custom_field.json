@@ -5,7 +5,8 @@
     "dt": "Issue",
     "fieldname": "synthetic_reference",
     "fieldtype": "Data",
-    "label": "Synthetic Reference"
+    "label": "Synthetic Reference",
+    "insert_after": "subject"
   },
   {
     "doctype": "Custom Field",

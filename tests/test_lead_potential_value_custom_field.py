@@ -4,12 +4,13 @@ Requirement: "When we create a lead, I want somewhere to enter how much we
 think that customer could be worth."
 
 This module is the dedicated, compact, Frappe-backed authority for that
-change. It proves, against a live ERPNext v16 site (not SQLite, not a mocked
-Frappe), that after fixture import the Lead doctype carries a Custom Field
-named "potential_value" with the exact label, fieldtype, and insert_after
-position requested. If Frappe is unavailable in this local sandbox, the case
-skips (never silently mocks) and the two configured validation lanes remain
-responsible for the authoritative post-finish run on a disposable site.
+change. It proves, against a live ERPNext v16 site (a real Frappe/MariaDB
+connection, never a mocked Frappe or database layer), that after fixture
+import the Lead doctype carries a Custom Field named "potential_value" with
+the exact label, fieldtype, and insert_after position requested. If Frappe
+is unavailable in this local sandbox, the case skips (never silently mocks)
+and the two configured validation lanes remain responsible for the
+authoritative post-finish run on a disposable site.
 """
 
 import json
