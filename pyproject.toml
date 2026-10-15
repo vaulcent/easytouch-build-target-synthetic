@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -16,21 +16,25 @@ requires-python = ">=3.12"
 # the module "Synthetic Build Target App", and Frappe's module loader
 # resolves that (scrubbed to "synthetic_build_target_app") by importing
 # "synthetic_build_target_app.synthetic_build_target_app" directly during
-# `bench install-app` / migrate. setuptools will not infer that nested
-# package on its own, so both packages must be declared explicitly here --
-# omitting the inner one is exactly what previously made app installation on
-# a disposable ERPNext v16 site fail with:
+# `bench install-app` / migrate. setuptools.packages.find with the
+# "synthetic_build_target_app*" include pattern discovers both the outer
+# package and this nested package (fnmatch "*" also matches the dot in the
+# dotted module path), so both are packaged without listing them by hand --
+# omitting either one is exactly what previously made app installation on a
+# disposable ERPNext v16 site fail with:
 #   ModuleNotFoundError: No module named
 #   'synthetic_build_target_app.synthetic_build_target_app'
 [tool.setuptools]
-packages = [
-    "synthetic_build_target_app",
-    "synthetic_build_target_app.synthetic_build_target_app",
-]
 include-package-data = true
 
+[tool.setuptools.packages.find]
+include = ["synthetic_build_target_app*"]
+
+# Frappe apps ship non-Python assets (fixtures, modules.txt, patches.txt,
+# etc.) alongside the package's .py files. setuptools only auto-includes
+# .py files for a discovered package, so every non-Python asset the app
+# needs at runtime (bench migrate's fixture import in particular) must be
+# listed explicitly here or it is silently dropped from the built/installed
+# package even though it is present in this source checkout.
 [tool.setuptools.package-data]
-synthetic_build_target_app = [
-    "modules.txt",
-    "fixtures/*.json",
-]
+synthetic_build_target_app = ["modules.txt", "fixtures/*.json"]

@@ -12,8 +12,9 @@ that change. It proves, against a real (disposable) ERPNext v16 site:
     Customer document (observable behavior, not just source/shape).
 
 It intentionally skips -- rather than mocks -- when Frappe is unavailable in
-this local sandbox, per the completion contract. No SQLite or mocked Frappe
-database access is used anywhere in this module.
+this local sandbox, per the completion contract. Only a real Frappe/MariaDB
+connection on the disposable ERPNext v16 site is used as evidence anywhere
+in this module.
 """
 
 import unittest
