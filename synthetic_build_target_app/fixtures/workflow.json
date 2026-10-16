@@ -1,0 +1,55 @@
+[
+  {
+    "doctype": "Workflow",
+    "name": "Sales Order Discount Approval",
+    "workflow_name": "Sales Order Discount Approval",
+    "document_type": "Sales Order",
+    "is_active": 1,
+    "override_status": 0,
+    "workflow_state_field": "workflow_state",
+    "send_email_alert": 0,
+    "states": [
+      {
+        "state": "Draft",
+        "doc_status": "0",
+        "allow_edit": "Sales User"
+      },
+      {
+        "state": "Pending Manager Approval",
+        "doc_status": "0",
+        "allow_edit": "Sales Manager"
+      },
+      {
+        "state": "Approved",
+        "doc_status": "1",
+        "allow_edit": "Sales Manager"
+      }
+    ],
+    "transitions": [
+      {
+        "state": "Draft",
+        "action": "Submit",
+        "next_state": "Approved",
+        "allowed": "Sales User",
+        "allow_self_approval": 1,
+        "condition": "doc.additional_discount_percentage <= 10"
+      },
+      {
+        "state": "Draft",
+        "action": "Send for Approval",
+        "next_state": "Pending Manager Approval",
+        "allowed": "Sales User",
+        "allow_self_approval": 1,
+        "condition": "doc.additional_discount_percentage > 10"
+      },
+      {
+        "state": "Pending Manager Approval",
+        "action": "Approve",
+        "next_state": "Approved",
+        "allowed": "Sales Manager",
+        "allow_self_approval": 0,
+        "condition": "doc.additional_discount_percentage > 10"
+      }
+    ]
+  }
+]
