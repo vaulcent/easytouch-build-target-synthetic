@@ -1,0 +1,20 @@
+[
+  {
+    "doctype": "Workflow State",
+    "name": "Draft",
+    "workflow_state_name": "Draft",
+    "style": ""
+  },
+  {
+    "doctype": "Workflow State",
+    "name": "Pending Manager Approval",
+    "workflow_state_name": "Pending Manager Approval",
+    "style": "Warning"
+  },
+  {
+    "doctype": "Workflow State",
+    "name": "Approved",
+    "workflow_state_name": "Approved",
+    "style": "Success"
+  }
+]

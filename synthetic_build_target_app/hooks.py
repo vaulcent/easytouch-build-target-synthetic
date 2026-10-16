@@ -15,6 +15,45 @@ fixtures = [
         "dt": "Role",
         "filters": [["name", "=", "Selling Rate Override"]],
     },
+    # Workflow State / Workflow Action Master masters referenced by the
+    # Sales Order discount-approval Workflow below. Filtered so only the
+    # records this Workflow actually uses are exported -- never the whole
+    # (shared) table, since other apps/workflows may define their own
+    # states/actions on the same site.
+    {
+        "dt": "Workflow State",
+        "filters": [["name", "in", ["Draft", "Pending Manager Approval", "Approved"]]],
+    },
+    {
+        "dt": "Workflow Action Master",
+        "filters": [["name", "in", ["Submit", "Send for Approval", "Approve"]]],
+    },
+    # Sales Order discount-approval Workflow.
+    #
+    # Requirement: salespeople must not be able to approve big discounts
+    # themselves. If a Sales Order's additional_discount_percentage is
+    # more than 10, it must go to a Sales Manager for approval instead of
+    # being submittable directly by the salesperson.
+    #
+    # States: "Draft" (docstatus 0, edited by the "Sales User" role) ->
+    # either "Approved" (docstatus 1) directly when discount <= 10, or
+    # "Pending Manager Approval" (docstatus 0, edited by "Sales Manager")
+    # when discount > 10 -> "Approved" (docstatus 1).
+    #
+    # The Draft -> Approved "Submit" transition (discount <= 10) is an
+    # ordinary self-submit by the Sales User who owns the order, so
+    # allow_self_approval is left at its default (1) there.
+    #
+    # The Pending Manager Approval -> Approved "Approve" transition is the
+    # one that must be independent of its requester: allow_self_approval
+    # is explicitly 0, so a Sales Manager who also happens to own/have
+    # created the order being approved is still denied by Frappe's own
+    # apply_workflow() self-approval rule, and only a *different* Sales
+    # Manager can complete that approval.
+    {
+        "dt": "Workflow",
+        "filters": [["name", "=", "Sales Order Discount Approval"]],
+    },
 ]
 
 # Every time a submitted Sales Invoice is created, automatically create a
@@ -32,3 +71,16 @@ doc_events = {
         "on_submit": "synthetic_build_target_app.sales_invoice_events.create_project_from_sales_invoice",
     }
 }
+
+# Idempotently install the minimal Sales Order read/write/create/submit
+# permissions that the discount-approval Workflow above requires for its
+# "Sales User" and "Sales Manager" actors, derived directly from that
+# workflow's own transition matrix: both the salesperson self-submit
+# transition (Draft -> Approved) and the manager Approve transition
+# (Pending Manager Approval -> Approved) perform a real docstatus 0 -> 1
+# submit, so both roles need live submit permission on Sales Order. This
+# grant lives in deployable app lifecycle code (after_migrate), never
+# inside the behavior tests themselves.
+after_migrate = [
+    "synthetic_build_target_app.sales_order_discount_workflow_permissions.ensure_discount_approval_permissions",
+]
