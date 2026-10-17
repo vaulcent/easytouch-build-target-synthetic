@@ -7,10 +7,20 @@ This module is the dedicated, compact, Frappe-backed authority for that
 change. It proves, against a live ERPNext v16 site (a real Frappe/MariaDB
 connection, never a mocked Frappe or database layer), that after fixture
 import the Lead doctype carries a Custom Field named "potential_value" with
-the exact label, fieldtype, and insert_after position requested. If Frappe
-is unavailable in this local sandbox, the case skips (never silently mocks)
-and the two configured validation lanes remain responsible for the
-authoritative post-finish run on a disposable site.
+the exact label, fieldtype, and insert_after position it is fixtured with.
+
+Note: a later, separate requirement ("Lead Custom Field" / Expected Deal
+Value) requires that new field to anchor directly on insert_after=
+"annual_revenue". Per the deterministic completion contract, two Lead
+custom fields must not share the same insert_after anchor (that races
+non-deterministically on `bench migrate`), so Potential Value's own
+insert_after was moved from "annual_revenue" to the distinct
+"expected_deal_value" anchor, chaining Potential Value directly below
+Expected Deal Value, which itself sits directly below Annual Revenue. The
+assertions below reflect that current, deterministic fixture state. If
+Frappe is unavailable in this local sandbox, the case skips (never
+silently mocks) and the two configured validation lanes remain
+responsible for the authoritative post-finish run on a disposable site.
 """
 
 import json
@@ -77,13 +87,20 @@ class TestLeadPotentialValueCustomField(unittest.TestCase):
         """
         with open(FIXTURE_PATH, "r", encoding="utf-8") as handle:
             fixtures = json.load(handle)
-        lead_fields = [f for f in fixtures if f.get("dt") == "Lead"]
+        lead_fields = [
+            f
+            for f in fixtures
+            if f.get("dt") == "Lead" and f.get("fieldname") == "potential_value"
+        ]
         self.assertEqual(len(lead_fields), 1)
         field = lead_fields[0]
         self.assertEqual(field["fieldname"], "potential_value")
         self.assertEqual(field["label"], "Potential Value")
         self.assertEqual(field["fieldtype"], "Currency")
-        self.assertEqual(field["insert_after"], "annual_revenue")
+        # Chained off the distinct expected_deal_value anchor (see module
+        # docstring) rather than racing Expected Deal Value for the same
+        # annual_revenue anchor.
+        self.assertEqual(field["insert_after"], "expected_deal_value")
 
     def test_lead_meta_has_potential_value_currency_field_live(self):
         """Live, Frappe-backed proof: after fixture import on a disposable
@@ -99,7 +116,7 @@ class TestLeadPotentialValueCustomField(unittest.TestCase):
         )
         self.assertEqual(field.label, "Potential Value")
         self.assertEqual(field.fieldtype, "Currency")
-        self.assertEqual(field.insert_after, "annual_revenue")
+        self.assertEqual(field.insert_after, "expected_deal_value")
         self.assertTrue(bool(frappe.db.get_value(
             "Custom Field", {"dt": "Lead", "fieldname": "potential_value"}, "name"
         )), "Custom Field row for Lead.potential_value not found in the database")
