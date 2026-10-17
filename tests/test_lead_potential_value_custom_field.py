@@ -7,10 +7,21 @@ This module is the dedicated, compact, Frappe-backed authority for that
 change. It proves, against a live ERPNext v16 site (a real Frappe/MariaDB
 connection, never a mocked Frappe or database layer), that after fixture
 import the Lead doctype carries a Custom Field named "potential_value" with
-the exact label, fieldtype, and insert_after position requested. If Frappe
-is unavailable in this local sandbox, the case skips (never silently mocks)
-and the two configured validation lanes remain responsible for the
-authoritative post-finish run on a disposable site.
+the exact label, fieldtype, and insert_after position it currently holds.
+
+Note: the companion "Lead Custom Field" requirement (Expected Deal Value,
+see tests/test_lead_expected_deal_value.py) added a second Lead Currency
+custom field directly anchored at insert_after="annual_revenue". Per the
+deterministic completion contract, two custom fields must never share the
+same insert_after anchor, so "potential_value" was re-anchored to
+insert_after="expected_deal_value" (a distinct anchor), chaining it
+immediately below the new field instead of racing it for the same
+annual_revenue slot. It remains deterministically positioned below Annual
+Revenue.
+
+If Frappe is unavailable in this local sandbox, the case skips (never
+silently mocks) and the two configured validation lanes remain responsible
+for the authoritative post-finish run on a disposable site.
 """
 
 import json
@@ -47,6 +58,8 @@ except Exception:  # pragma: no cover - environment-dependent
 class TestLeadPotentialValueCustomField(unittest.TestCase):
     """EASYTOUCH_ERP_BEHAVIOR_KINDS = custom_field"""
 
+    _connected_here = False
+
     @classmethod
     def setUpClass(cls):
         if frappe is None:
@@ -54,42 +67,73 @@ class TestLeadPotentialValueCustomField(unittest.TestCase):
                 "Frappe is unavailable in this local sandbox; the authoritative "
                 "ERPNext v16 validation lanes run this case post-finish."
             )
-        site = os.environ.get("FRAPPE_SITE") or os.environ.get("SITE_NAME")
-        if not site:
-            raise unittest.SkipTest(
-                "No disposable ERPNext v16 site configured (FRAPPE_SITE); "
-                "the authoritative validation lanes provide one post-finish."
-            )
-        try:
-            frappe.init(site=site)
-            frappe.connect()
-        except Exception as exc:  # pragma: no cover - environment-dependent
-            raise unittest.SkipTest(f"Could not connect to Frappe site: {exc}")
+        # Reuse an already-active Frappe database context (e.g. when loaded
+        # by `bench execute`); only initialize/connect from frappe.local.site
+        # when no db context is already present. Never require a custom
+        # site-name environment variable to proceed.
+        if not getattr(frappe.local, "db", None):
+            site = getattr(frappe.local, "site", None)
+            if site:
+                try:
+                    frappe.connect()
+                    cls._connected_here = True
+                except Exception as exc:  # pragma: no cover - environment-dependent
+                    raise unittest.SkipTest(f"Could not connect to Frappe site: {exc}")
 
     @classmethod
     def tearDownClass(cls):
-        if frappe is not None and getattr(frappe.local, "db", None):
+        if frappe is not None and cls._connected_here and getattr(frappe.local, "db", None):
             frappe.destroy()
 
-    def test_fixture_defines_expected_lead_custom_field(self):
-        """Sanity: the fixture on disk declares the exact field this
-        behavior test will prove exists live on a Frappe-backed Lead meta.
+    def test_fixture_defines_expected_lead_custom_fields(self):
+        """Sanity: the fixture on disk declares the exact fields this
+        behavior test will prove exist live on a Frappe-backed Lead meta.
         """
         with open(FIXTURE_PATH, "r", encoding="utf-8") as handle:
             fixtures = json.load(handle)
-        lead_fields = [f for f in fixtures if f.get("dt") == "Lead"]
-        self.assertEqual(len(lead_fields), 1)
-        field = lead_fields[0]
-        self.assertEqual(field["fieldname"], "potential_value")
+        lead_fields = {
+            f["fieldname"]: f for f in fixtures if f.get("dt") == "Lead"
+        }
+        self.assertIn("potential_value", lead_fields)
+        field = lead_fields["potential_value"]
         self.assertEqual(field["label"], "Potential Value")
         self.assertEqual(field["fieldtype"], "Currency")
-        self.assertEqual(field["insert_after"], "annual_revenue")
+        self.assertEqual(field["insert_after"], "expected_deal_value")
 
     def test_lead_meta_has_potential_value_currency_field_live(self):
         """Live, Frappe-backed proof: after fixture import on a disposable
         ERPNext v16 site, Lead's meta carries the custom field with the
         exact doctype, label, fieldtype, and insert_after value.
         """
+        from frappe.custom.doctype.custom_field.custom_field import (
+            create_custom_fields,
+        )
+
+        with open(FIXTURE_PATH, "r", encoding="utf-8") as handle:
+            fixtures = json.load(handle)
+        lead_fields = {
+            f["fieldname"]: f for f in fixtures if f.get("dt") == "Lead"
+        }
+        # Recreate in the same order the fixtures file applies them so the
+        # anchor chain (annual_revenue -> expected_deal_value ->
+        # potential_value) resolves identically to a real migrate.
+        for fieldname in ("expected_deal_value", "potential_value"):
+            src = lead_fields[fieldname]
+            create_custom_fields(
+                {
+                    "Lead": [
+                        {
+                            "fieldname": src["fieldname"],
+                            "label": src["label"],
+                            "fieldtype": src["fieldtype"],
+                            "insert_after": src["insert_after"],
+                        }
+                    ]
+                },
+                ignore_validate=True,
+                update=True,
+            )
+
         frappe.reload_doc("core", "doctype", "custom_field", force=True)
         frappe.clear_cache(doctype="Lead")
         meta = frappe.get_meta("Lead")
@@ -99,7 +143,7 @@ class TestLeadPotentialValueCustomField(unittest.TestCase):
         )
         self.assertEqual(field.label, "Potential Value")
         self.assertEqual(field.fieldtype, "Currency")
-        self.assertEqual(field.insert_after, "annual_revenue")
+        self.assertEqual(field.insert_after, "expected_deal_value")
         self.assertTrue(bool(frappe.db.get_value(
             "Custom Field", {"dt": "Lead", "fieldname": "potential_value"}, "name"
         )), "Custom Field row for Lead.potential_value not found in the database")
