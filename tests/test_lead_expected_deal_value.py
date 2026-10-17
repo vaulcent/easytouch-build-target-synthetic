@@ -1,19 +1,20 @@
 """Evidence for the "Lead Custom Field" requirement.
 
 Goal: add a custom Currency field "Expected Deal Value" to Lead, placed
-below "Annual Revenue".
+directly below "Annual Revenue".
 
 On this app's Lead custom fields, another pre-existing Currency field
-("Potential Value", fieldname potential_value) is already fixtured with
-insert_after=annual_revenue, i.e. it already occupies the slot
-immediately below Annual Revenue. To avoid two custom fields both racing
-for the exact same insert_after target (which produces a nondeterministic
-final position when both are imported via `bench migrate`, as happened in
-the previously rejected patch), the Expected Deal Value field explicitly
-declares insert_after="potential_value". That keeps it correctly and
-deterministically positioned below Annual Revenue (immediately below the
-other revenue-related custom field that itself sits directly under Annual
-Revenue), rather than silently losing a position race during migrate.
+("Potential Value", fieldname potential_value) is also fixtured on Lead.
+The completion contract requires that Expected Deal Value itself anchor
+with insert_after="annual_revenue" directly (not via another custom
+field that is itself below the anchor), and that no other field share
+that exact same insert_after anchor. So Potential Value is chained
+through a distinct anchor: insert_after="expected_deal_value", i.e. it
+sits directly below Expected Deal Value, which itself sits directly
+below Annual Revenue. This keeps the final rendered order deterministic
+on a real site regardless of fixture import order:
+
+    Annual Revenue -> Expected Deal Value -> Potential Value
 
 This module hosts two cases:
 
@@ -34,7 +35,7 @@ import json
 import os
 import unittest
 
-EASYTOUCH_ERP_BEHAVIOR_KINDS = ("CUSTOM_FIELD",)
+EASYTOUCH_ERP_BEHAVIOR_KINDS = ("custom_field",)
 
 try:
     import frappe  # type: ignore
@@ -79,20 +80,34 @@ class TestLeadExpectedDealValueFixture(unittest.TestCase):
         field = matches[0]
         self.assertEqual(field.get("label"), "Expected Deal Value")
         self.assertEqual(field.get("fieldtype"), "Currency")
-        # Explicitly anchored below the other pre-existing Lead currency
-        # field that itself sits directly under Annual Revenue, so the
-        # final position below Annual Revenue is deterministic on a real
-        # site regardless of fixture import order.
-        self.assertEqual(field.get("insert_after"), "potential_value")
+        # Anchored directly below Annual Revenue, as the completion
+        # contract requires: no other field shares this exact anchor.
+        self.assertEqual(field.get("insert_after"), "annual_revenue")
 
-    def test_fixture_potential_value_still_anchored_to_annual_revenue(self):
+    def test_fixture_potential_value_chained_below_expected_deal_value(self):
         matches = _load_lead_fixture("potential_value")
         self.assertEqual(len(matches), 1)
-        self.assertEqual(matches[0].get("insert_after"), "annual_revenue")
+        # Chained through a distinct anchor (not "annual_revenue") so the
+        # two custom fields never race for the same insert_after slot.
+        self.assertEqual(matches[0].get("insert_after"), "expected_deal_value")
+
+    def test_no_two_lead_custom_fields_share_an_insert_after_anchor(self):
+        fixtures = _load_fixtures()
+        lead_fields = [
+            f
+            for f in fixtures
+            if f.get("doctype") == "Custom Field" and f.get("dt") == "Lead"
+        ]
+        anchors = [f.get("insert_after") for f in lead_fields]
+        self.assertEqual(
+            len(anchors),
+            len(set(anchors)),
+            "Two Lead custom fields must not share the same insert_after anchor",
+        )
 
 
 class TestLeadExpectedDealValueBehavior(unittest.TestCase):
-    """EASYTOUCH_ERP_BEHAVIOR_KINDS = ("CUSTOM_FIELD",)
+    """EASYTOUCH_ERP_BEHAVIOR_KINDS = ("custom_field",)
 
     Authoritative ERPNext-backed evidence. Run for real against a fresh
     disposable ERPNext v16 site in the post-finish validation lanes; only
@@ -105,32 +120,18 @@ class TestLeadExpectedDealValueBehavior(unittest.TestCase):
         if not FRAPPE_AVAILABLE:
             raise unittest.SkipTest("Frappe is unavailable in this local sandbox")
 
-    def test_custom_field_present_and_positioned_on_lead(self):
+    def test_custom_field_present_and_positioned_directly_below_annual_revenue(self):
         from frappe.custom.doctype.custom_field.custom_field import (
             create_custom_fields,
         )
 
         # Recreate both Lead custom fields in the same order `bench migrate`
-        # applies the fixtures file (potential_value, then
-        # expected_deal_value), so the resulting position is the same one
-        # a real disposable site ends up with.
-        potential_value_fixture = _load_lead_fixture("potential_value")[0]
+        # applies the fixtures file (expected_deal_value, then
+        # potential_value), so the resulting position matches the one a
+        # real disposable site ends up with.
         expected_deal_value_fixture = _load_lead_fixture("expected_deal_value")[0]
+        potential_value_fixture = _load_lead_fixture("potential_value")[0]
 
-        create_custom_fields(
-            {
-                "Lead": [
-                    {
-                        "fieldname": potential_value_fixture["fieldname"],
-                        "label": potential_value_fixture["label"],
-                        "fieldtype": potential_value_fixture["fieldtype"],
-                        "insert_after": potential_value_fixture["insert_after"],
-                    }
-                ]
-            },
-            ignore_validate=True,
-            update=True,
-        )
         create_custom_fields(
             {
                 "Lead": [
@@ -145,6 +146,20 @@ class TestLeadExpectedDealValueBehavior(unittest.TestCase):
             ignore_validate=True,
             update=True,
         )
+        create_custom_fields(
+            {
+                "Lead": [
+                    {
+                        "fieldname": potential_value_fixture["fieldname"],
+                        "label": potential_value_fixture["label"],
+                        "fieldtype": potential_value_fixture["fieldtype"],
+                        "insert_after": potential_value_fixture["insert_after"],
+                    }
+                ]
+            },
+            ignore_validate=True,
+            update=True,
+        )
         frappe.clear_cache(doctype="Lead")
 
         meta = frappe.get_meta("Lead")
@@ -152,24 +167,26 @@ class TestLeadExpectedDealValueBehavior(unittest.TestCase):
         self.assertIsNotNone(field)
         self.assertEqual(field.label, "Expected Deal Value")
         self.assertEqual(field.fieldtype, "Currency")
-        self.assertEqual(field.insert_after, "potential_value")
+        self.assertEqual(field.insert_after, "annual_revenue")
 
         annual_revenue_idx = next(
             i for i, df in enumerate(meta.fields) if df.fieldname == "annual_revenue"
         )
+        expected_deal_value_idx = next(
+            i
+            for i, df in enumerate(meta.fields)
+            if df.fieldname == "expected_deal_value"
+        )
         potential_value_idx = next(
             i for i, df in enumerate(meta.fields) if df.fieldname == "potential_value"
         )
-        expected_deal_value_idx = next(
-            i for i, df in enumerate(meta.fields) if df.fieldname == "expected_deal_value"
-        )
 
-        # Expected Deal Value sits directly below Potential Value, which
-        # itself sits directly below Annual Revenue -- so Expected Deal
-        # Value is deterministically below Annual Revenue.
-        self.assertEqual(potential_value_idx, annual_revenue_idx + 1)
-        self.assertEqual(expected_deal_value_idx, potential_value_idx + 1)
-        self.assertGreater(expected_deal_value_idx, annual_revenue_idx)
+        # Expected Deal Value sits directly below Annual Revenue -- the
+        # exact anchor relationship the completion contract requires.
+        self.assertEqual(expected_deal_value_idx, annual_revenue_idx + 1)
+        # Potential Value is chained below Expected Deal Value (a distinct
+        # anchor), so the overall rendered order stays deterministic.
+        self.assertEqual(potential_value_idx, expected_deal_value_idx + 1)
 
         lead = frappe.get_doc(
             {
