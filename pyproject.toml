@@ -2,22 +2,3 @@
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
-
-[build-system]
-requires = ["setuptools>=64"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-include-package-data = true
-
-[tool.setuptools.packages.find]
-include = ["synthetic_build_target_app*"]
-
-# Frappe apps ship non-Python assets (fixtures, hooks metadata, module
-# manifests) alongside the importable package. Without declaring them as
-# package-data here, a built sdist/wheel silently drops
-# `fixtures/custom_field.json`, so `bench migrate` on the installed package
-# has no Custom Field fixture to import even though it is present in the
-# source tree.
-[tool.setuptools.package-data]
-"synthetic_build_target_app" = ["fixtures/*.json", "modules.txt"]
