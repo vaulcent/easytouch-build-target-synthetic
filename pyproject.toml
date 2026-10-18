@@ -2,3 +2,22 @@
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["synthetic_build_target_app*"]
+
+# The fixtures/custom_field.json file previously shipped in the repository's
+# source tree but was never declared as package data, so when the app was
+# built into an installable package, setuptools dropped the fixtures
+# directory entirely. `bench migrate` then found no custom_field.json to
+# import from the installed package, even though it existed in source.
+# Declaring it explicitly here ensures it is packaged every time.
+[tool.setuptools.package-data]
+"synthetic_build_target_app" = ["fixtures/*.json", "modules.txt"]
