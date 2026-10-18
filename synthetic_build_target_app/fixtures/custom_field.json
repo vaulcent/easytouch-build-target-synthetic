@@ -6,5 +6,15 @@
     "fieldname": "synthetic_reference",
     "fieldtype": "Data",
     "label": "Synthetic Reference"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Lead-potential_deal_value",
+    "dt": "Lead",
+    "fieldname": "potential_deal_value",
+    "fieldtype": "Currency",
+    "label": "Potential Deal Value",
+    "insert_after": "annual_revenue",
+    "description": "Estimated value this prospect/customer could be worth if the deal closes."
   }
 ]
