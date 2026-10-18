@@ -1,4 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
+
+# This repository's installable Python package is the
+# `synthetic_build_target_app` directory (the Frappe app module), which
+# ships non-Python Frappe assets (fixtures/*.json, modules.txt) alongside
+# its .py files. Plain setuptools auto-discovery only ships .py files, so
+# a prior build produced a site-packages install missing
+# `fixtures/custom_field.json`, which made `bench migrate` unable to import
+# the Lead "Expected Deal Value" Custom Field fixture at all
+# (FIXTURE_VERIFY_FAILED). Declaring explicit package-data below packages
+# those non-.py Frappe assets into the installed distribution so
+# `bench migrate` can actually read and import them on the disposable
+# ERPNext v16 validation site.
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["synthetic_build_target_app", "synthetic_build_target_app.*"]
+
+[tool.setuptools.package-data]
+synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
