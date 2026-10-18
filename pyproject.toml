@@ -1,4 +1,23 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["synthetic_build_target_app*"]
+
+# The app's fixtures/ directory (consumed by `bench migrate` via the
+# `fixtures` list in hooks.py) and modules.txt are plain data files, not
+# Python modules. setuptools does not include non-.py files inside a
+# package by default, which previously meant `fixtures/custom_field.json`
+# was present in the source tree but silently dropped from the installed
+# site-packages copy of the app -- so `bench migrate` never found it to
+# import. Declare them explicitly as package data so they are packaged and
+# installed alongside the rest of the app.
+[tool.setuptools.package-data]
+"synthetic_build_target_app" = ["fixtures/*.json", "modules.txt"]
