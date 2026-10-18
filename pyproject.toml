@@ -1,25 +1,4 @@
-[build-system]
-requires = ["setuptools>=64"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "synthetic_build_target_app"
+name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
-
-# This repository packages a minimal Frappe custom app whose importable package
-# is "synthetic_build_target_app" (the directory containing hooks.py, modules.txt,
-# and fixtures/). That directory also contains a nested sub-package of the same
-# name (the app's default Frappe module folder). Both must be discovered so the
-# built/installed package layout matches what `bench` expects on site-packages.
-[tool.setuptools.packages.find]
-include = ["synthetic_build_target_app*"]
-
-# Non-Python assets (fixtures, modules.txt) live inside the "synthetic_build_target_app"
-# package directory but are not themselves Python modules, so setuptools will not
-# include them in the built/installed package unless explicitly declared here.
-# Without this, `fixtures/custom_field.json` is present in the source tree but
-# absent from the installed site-packages copy, and `bench migrate` has nothing
-# to import -- which is the exact failure this declaration fixes.
-[tool.setuptools.package-data]
-synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
