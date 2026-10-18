@@ -2,24 +2,3 @@
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
-
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["synthetic_build_target_app*"]
-
-# Ensure non-.py app assets (fixtures, hooks metadata, module manifest) are
-# actually packaged into the installed distribution. Without this, Frappe's
-# fixture importer (`bench migrate`) has nothing to read at
-# <site-packages>/synthetic_build_target_app/fixtures/*.json even though the
-# file is present in the source tree, which is exactly what produced the
-# FIXTURE_VERIFY_FAILED error for custom_field.json.
-[tool.setuptools.package-data]
-synthetic_build_target_app = [
-    "fixtures/*.json",
-    "modules.txt",
-    "hooks.py",
-]
