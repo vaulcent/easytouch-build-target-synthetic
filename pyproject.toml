@@ -1,26 +1,4 @@
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "synthetic-build-target-app"
 version = "0.0.1"
 requires-python = ">=3.12"
-
-[tool.setuptools]
-# The installable Python package is the top-level "synthetic_build_target_app"
-# directory. It in turn contains a nested "synthetic_build_target_app" module
-# folder (the Frappe module matching the app label). Both must be listed
-# explicitly so the built wheel/sdist includes the full app, and
-# include-package-data must be true so non-.py assets such as
-# fixtures/custom_field.json and modules.txt are actually packaged (not just
-# present in the source tree) -- otherwise `bench migrate` on the installed
-# site has no fixture file to import, even though it exists in this repo.
-packages = [
-    "synthetic_build_target_app",
-    "synthetic_build_target_app.synthetic_build_target_app",
-]
-include-package-data = true
-
-[tool.setuptools.package-data]
-synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
