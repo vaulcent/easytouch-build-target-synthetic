@@ -1,4 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "synthetic-build-target-app"
+name = "synthetic_build_target_app"
 version = "0.0.1"
 requires-python = ">=3.12"
+
+# This project packages a Frappe app whose fixtures (non-Python data files,
+# e.g. synthetic_build_target_app/fixtures/custom_field.json) must be shipped
+# inside the installed distribution so that `bench migrate` can import them.
+# Without explicit package-data configuration, setuptools only installs .py
+# files belonging to discovered packages and silently drops data files such
+# as fixtures/*.json, which previously caused FIXTURE_VERIFY_FAILED because
+# the fixture was present in source control but missing from the installed
+# package.
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["synthetic_build_target_app", "synthetic_build_target_app.*"]
+
+[tool.setuptools.package-data]
+synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
