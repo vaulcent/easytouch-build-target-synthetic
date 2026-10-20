@@ -9,12 +9,21 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Lead-expected_deal_value",
+    "dt": "Lead",
+    "fieldname": "expected_deal_value",
+    "fieldtype": "Currency",
+    "label": "Expected Deal Value",
+    "insert_after": "annual_revenue"
+  },
+  {
+    "doctype": "Custom Field",
     "name": "Lead-estimated_value",
     "dt": "Lead",
     "fieldname": "estimated_value",
     "fieldtype": "Currency",
     "label": "Estimated Value",
-    "insert_after": "annual_revenue",
+    "insert_after": "expected_deal_value",
     "description": "Estimated potential value of this customer/lead, entered when the lead is created."
   }
 ]

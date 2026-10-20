@@ -11,6 +11,11 @@ this app has been imported (e.g. via `bench --site <site> migrate` or
 `bench --site <site> import-fixtures`). This test is skipped only when Frappe itself is
 not importable in the local sandbox (Frappe is intentionally unavailable there); it must
 never be a source-inspection-only, mocked, or placeholder check.
+
+Note: this field was landed before the separate "Expected Deal Value" field. Both fields
+sit directly below Annual Revenue in the UI, so they are chained through distinct
+insert_after anchors (annual_revenue -> expected_deal_value -> estimated_value) rather
+than sharing the same anchor, which would make Frappe's rendered order ambiguous.
 """
 
 import json
@@ -46,13 +51,21 @@ class TestLeadEstimatedValueCustomField(unittest.TestCase):
 
         lead_fields = [r for r in records if r.get("dt") == "Lead"]
         self.assertEqual(
-            len(lead_fields), 1, "Expected exactly one Lead custom field fixture entry"
+            len(lead_fields), 2, "Expected exactly two Lead custom field fixture entries"
         )
-        field = lead_fields[0]
+
+        by_fieldname = {f["fieldname"]: f for f in lead_fields}
+        field = by_fieldname["estimated_value"]
         self.assertEqual(field["fieldname"], "estimated_value")
         self.assertEqual(field["label"], "Estimated Value")
         self.assertEqual(field["fieldtype"], "Currency")
-        self.assertEqual(field["insert_after"], "annual_revenue")
+        # Chained behind the Expected Deal Value field (which is itself directly
+        # after annual_revenue) so no two fields share the same insert_after anchor.
+        self.assertEqual(field["insert_after"], "expected_deal_value")
+
+        # The anchor chain must be deterministic end-to-end.
+        anchor_field = by_fieldname["expected_deal_value"]
+        self.assertEqual(anchor_field["insert_after"], "annual_revenue")
 
     @unittest.skipUnless(
         FRAPPE_AVAILABLE,
@@ -77,7 +90,7 @@ class TestLeadEstimatedValueCustomField(unittest.TestCase):
         self.assertEqual(doc.fieldname, "estimated_value")
         self.assertEqual(doc.label, "Estimated Value")
         self.assertEqual(doc.fieldtype, "Currency")
-        self.assertEqual(doc.insert_after, "annual_revenue")
+        self.assertEqual(doc.insert_after, "expected_deal_value")
 
         # Prove the field actually reaches the Lead screen/doctype meta and is
         # writable, i.e. a real captured value on a created Lead.
@@ -86,7 +99,7 @@ class TestLeadEstimatedValueCustomField(unittest.TestCase):
         self.assertIsNotNone(meta_field)
         self.assertEqual(meta_field.fieldtype, "Currency")
         self.assertEqual(meta_field.label, "Estimated Value")
-        self.assertEqual(meta_field.insert_after, "annual_revenue")
+        self.assertEqual(meta_field.insert_after, "expected_deal_value")
 
         lead = frappe.get_doc(
             {
