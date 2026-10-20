@@ -7,17 +7,26 @@ name = "synthetic_build_target_app"
 version = "0.0.1"
 requires-python = ">=3.12"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["synthetic_build_target_app*"]
-
+# Explicit package list (rather than setuptools auto-discovery) so the
+# built/installed distribution always contains both the app package
+# (hooks.py, modules.txt, fixtures/) and its nested module package,
+# regardless of which directory `pip`/`bench` happens to be invoked
+# from. Auto-discovery silently dropping a package, or package-data
+# globs being omitted, is exactly what previously caused
+# fixtures/custom_field.json to be present in source but absent from
+# the installed site-packages copy (FIXTURE_VERIFY_FAILED), which in
+# turn made `bench migrate` never import the Custom Field and made the
+# metadata/behavior checks that depend on it fail as well.
 [tool.setuptools]
+packages = [
+    "synthetic_build_target_app",
+    "synthetic_build_target_app.synthetic_build_target_app",
+]
 include-package-data = true
 
-# Frappe apps rely on non-Python data files (fixtures/*.json, modules.txt) being
-# bundled into the installed package so `bench migrate` can import them. Without
-# an explicit package-data declaration, setuptools only ships *.py files and the
-# fixtures directory is silently dropped from the built/installed package, which
-# is why `bench migrate` could not find custom_field.json at all.
+# package-data is respected for wheel builds directly by setuptools
+# (independent of MANIFEST.in), so this guarantees fixtures/*.json and
+# modules.txt are packaged into the installed distribution every time,
+# not only when building an sdist.
 [tool.setuptools.package-data]
 synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]

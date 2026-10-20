@@ -36,5 +36,16 @@
     "options": "Normal\nVIP\nHigh Risk",
     "default": "Normal",
     "insert_after": "customer_group"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Item-important_item",
+    "dt": "Item",
+    "fieldname": "important_item",
+    "fieldtype": "Check",
+    "label": "Important Item",
+    "insert_after": "is_stock_item",
+    "default": "0",
+    "description": "When checked, the Purchase Manager is automatically alerted if this item's stock falls below 10."
   }
 ]
