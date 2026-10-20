@@ -25,5 +25,16 @@
     "label": "Estimated Value",
     "insert_after": "expected_deal_value",
     "description": "Estimated potential value of this customer/lead, entered when the lead is created."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Customer-customer_classification",
+    "dt": "Customer",
+    "fieldname": "customer_classification",
+    "fieldtype": "Select",
+    "label": "Customer Classification",
+    "options": "Normal\nVIP\nHigh Risk",
+    "default": "Normal",
+    "insert_after": "customer_group"
   }
 ]
