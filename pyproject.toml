@@ -14,5 +14,10 @@ include = ["synthetic_build_target_app*"]
 [tool.setuptools]
 include-package-data = true
 
+# Frappe apps rely on non-Python data files (fixtures/*.json, modules.txt) being
+# bundled into the installed package so `bench migrate` can import them. Without
+# an explicit package-data declaration, setuptools only ships *.py files and the
+# fixtures directory is silently dropped from the built/installed package, which
+# is why `bench migrate` could not find custom_field.json at all.
 [tool.setuptools.package-data]
 synthetic_build_target_app = ["fixtures/*.json", "modules.txt"]
